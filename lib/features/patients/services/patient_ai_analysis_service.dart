@@ -1,79 +1,157 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 
 class PatientAiAnalysisService {
+  static const String _modelName = 'gemini-2.5-flash-lite';
+  static bool _isPatientAiRequestRunning = false;
+
   static Future<String> analyzePatientFileWithGemini({
     required String apiKey,
     required String prompt,
     required Map<String, dynamic> patientPayload,
   }) async {
- final uri = Uri.parse(
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey',
-);
+    final cleanKey = apiKey.trim();
 
-    final fullPrompt = '''
+    if (cleanKey.isEmpty) {
+      throw Exception('401 Missing Gemini API key.');
+    }
+
+    if (_isPatientAiRequestRunning) {
+      throw Exception(
+        'analysis_in_progress: Patient AI analysis already running.',
+      );
+    }
+
+    _isPatientAiRequestRunning = true;
+
+    try {
+      final uri = Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models/$_modelName:generateContent',
+      );
+
+      final fullPrompt = '''
 $prompt
 
 Patient file data JSON:
 ${jsonEncode(patientPayload)}
 ''';
 
-    final response = await http.post(
-      uri,
-      headers: const {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'contents': [
-          {
-            'parts': [
-              {'text': fullPrompt},
-            ],
-          },
-        ],
-        'generationConfig': {
-          'temperature': 0.35,
-          'topP': 0.9,
-          'maxOutputTokens': 4096,
-        },
-      }),
-    );
+      final response = await http
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': cleanKey,
+            },
+            body: jsonEncode({
+              'contents': [
+                {
+                  'parts': [
+                    {'text': fullPrompt},
+                  ],
+                },
+              ],
+              'generationConfig': {
+                'temperature': 0.25,
+                'topP': 0.85,
+                'topK': 20,
+                'maxOutputTokens': 1800,
+              },
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        _throwFriendlyGeminiError(response);
+      }
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final candidates = body['candidates'] as List?;
+
+      if (candidates == null || candidates.isEmpty) {
+        throw Exception('No Gemini response candidates.');
+      }
+
+      final firstCandidate = candidates.first;
+      if (firstCandidate is! Map) {
+        throw Exception('Invalid Gemini response candidate.');
+      }
+
+      final content = firstCandidate['content'];
+      if (content is! Map) {
+        throw Exception('Invalid Gemini response content.');
+      }
+
+      final parts = content['parts'];
+      if (parts is! List || parts.isEmpty) {
+        throw Exception('Invalid Gemini response parts.');
+      }
+
+      final firstPart = parts.first;
+      if (firstPart is! Map) {
+        throw Exception('Invalid Gemini response part.');
+      }
+
+      final text = firstPart['text']?.toString().trim() ?? '';
+
+      if (text.isEmpty) {
+        throw Exception('Empty Gemini response text.');
+      }
+
+      return text;
+    } on TimeoutException {
+      throw Exception('timeout: Gemini patient analysis request took too long.');
+    } finally {
+      _isPatientAiRequestRunning = false;
+    }
+  }
+
+  static Never _throwFriendlyGeminiError(http.Response response) {
+    final body = response.body.toLowerCase();
+
+    if (response.statusCode == 401) {
       throw Exception(
-        'Gemini request failed: ${response.statusCode} ${response.body}',
+        '401 Unauthorized: Invalid Gemini API key or unsupported credential type.',
       );
     }
 
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final candidates = body['candidates'] as List?;
-    if (candidates == null || candidates.isEmpty) {
-      throw Exception('No Gemini response candidates.');
+    if (response.statusCode == 403) {
+      throw Exception(
+        '403 Forbidden: API key is restricted, disabled, or Generative Language API is not allowed.',
+      );
     }
 
-    final firstCandidate = candidates.first;
-    if (firstCandidate is! Map) {
-      throw Exception('Invalid Gemini response candidate.');
+    if (response.statusCode == 404) {
+      throw Exception(
+        '404 Not Found: Gemini model $_modelName is not available for this key/project.',
+      );
     }
 
-    final content = firstCandidate['content'];
-    if (content is! Map) {
-      throw Exception('Invalid Gemini response content.');
+    if (response.statusCode == 429 ||
+        body.contains('too many requests') ||
+        body.contains('quota') ||
+        body.contains('rate limit') ||
+        body.contains('resource exhausted')) {
+      throw Exception(
+        '429 Too Many Requests: Gemini quota or rate limit exceeded.',
+      );
     }
 
-    final parts = content['parts'];
-    if (parts is! List || parts.isEmpty) {
-      throw Exception('Invalid Gemini response parts.');
+    if (response.statusCode == 503 ||
+        body.contains('service unavailable') ||
+        body.contains('unavailable') ||
+        body.contains('overloaded')) {
+      throw Exception(
+        '503 Service Unavailable: Gemini is temporarily busy.',
+      );
     }
 
-    final firstPart = parts.first;
-    if (firstPart is! Map) {
-      throw Exception('Invalid Gemini response part.');
-    }
-
-    return firstPart['text']?.toString() ?? '';
+    throw Exception(
+      'Gemini request failed: ${response.statusCode} ${response.body}',
+    );
   }
 
   static Future<String> saveAnalysis({

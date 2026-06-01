@@ -94,8 +94,10 @@ class _PatientAccountScreenState extends State<PatientAccountScreen> {
   // Gemini API Key من Google AI Studio.
   // ملاحظة: مفاتيح Google AI Studio الجديدة قد تبدأ بـ AQ. بدل AIza.
   // للتجربة الجامعية يعمل هنا، لكن للإنتاج الأفضل نقله إلى Cloud Functions.
-  final String patientAiApiKey = 'AQ.Ab8RN6LCKEvTb6H6436Twt90OD7iirRskNstlq8qqe_GGMTCJA';
-
+static const String patientAiApiKey = String.fromEnvironment(
+  'PATIENT_GEMINI_API_KEY',
+  defaultValue: '',
+);
   bool get _isAdminUser => _currentUserRole == 'admin';
 
   bool _hasPermission(String key) {

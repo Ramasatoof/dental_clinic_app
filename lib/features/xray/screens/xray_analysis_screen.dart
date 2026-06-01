@@ -69,8 +69,10 @@ class _XRayAnalysisScreenState extends State<XRayAnalysisScreen> {
   TransformationController? previewTransformationController;
 
   // ضعي مفتاح الأشعة الجديد هنا إذا غيرتيه من Google AI Studio.
-  final String apiKey = "AQ.Ab8RN6KhLjtmGl9YziZi079uzLHw_eG5P-wpxyqkgYP5KGwgOg";
-
+static const String apiKey = String.fromEnvironment(
+  'XRAY_GEMINI_API_KEY',
+  defaultValue: '',
+);
   @override
   void initState() {
     super.initState();
