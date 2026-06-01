@@ -4,17 +4,19 @@ import 'dart:ui' as ui;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../services/xray_analysis_service.dart';
+
 import '../../../core/layout/custom_layout.dart';
 import '../../../core/theme/app_theme_controller.dart';
+import '../services/xray_analysis_service.dart';
 import '../utils/xray_analysis_utils.dart';
-import '../widgets/xray_confidence_chip.dart';
-import '../widgets/xray_status_chip.dart';
-import '../widgets/xray_image_action_button.dart';
-import '../widgets/xray_history_date_button.dart';
 import '../widgets/xray_adjustment_slider.dart';
+import '../widgets/xray_confidence_chip.dart';
 import '../widgets/xray_findings_overlay.dart';
+import '../widgets/xray_history_date_button.dart';
+import '../widgets/xray_image_action_button.dart';
 import '../widgets/xray_new_analysis_button.dart';
+import '../widgets/xray_status_chip.dart';
+
 const Color lapisBlue = AppThemeColors.lapisBlue;
 const Color lightGray = AppThemeColors.lightGray;
 const Color lightBlue = AppThemeColors.lightBlue;
@@ -35,9 +37,13 @@ class XRayAnalysisScreen extends StatefulWidget {
 
 class _XRayAnalysisScreenState extends State<XRayAnalysisScreen> {
   late bool isArabic;
+
   bool isAnalyzing = false;
   bool isSavingAnalysis = false;
   bool isHistoryOpen = true;
+
+  DateTime? _lastAnalysisStartedAt;
+  static const Duration _analysisCooldown = Duration(minutes: 1);
 
   XFile? selectedImage;
   Uint8List? previewBytes;
@@ -62,7 +68,8 @@ class _XRayAnalysisScreenState extends State<XRayAnalysisScreen> {
   final TextEditingController historySearchController = TextEditingController();
   TransformationController? previewTransformationController;
 
-  final String apiKey = "AIzaSyBwM9a_aFMNTJomIaMZVwezefv2VTSsbr0";
+  // ضعي مفتاح الأشعة الجديد هنا إذا غيرتيه من Google AI Studio.
+  final String apiKey = "AQ.Ab8RN6KhLjtmGl9YziZi079uzLHw_eG5P-wpxyqkgYP5KGwgOg";
 
   @override
   void initState() {
@@ -71,13 +78,32 @@ class _XRayAnalysisScreenState extends State<XRayAnalysisScreen> {
     previewTransformationController = TransformationController();
   }
 
+  @override
+  void dispose() {
+    searchController.dispose();
+    historySearchController.dispose();
+    previewTransformationController?.dispose();
+    super.dispose();
+  }
+
   String tr(String ar, String en) => isArabic ? ar : en;
 
+ bool get _canStartAnalysis {
+  if (selectedImage == null || previewBytes == null) return false;
+  if (isAnalyzing || isSavingAnalysis) return false;
+
+  // إذا في نتيجة ظاهرة، اسمح بإعادة التحليل مباشرة
+  if (aiResult != null) return true;
+
+  final last = _lastAnalysisStartedAt;
+  if (last == null) return true;
+
+  return DateTime.now().difference(last) >= _analysisCooldown;
+}
   TextDirection get _contentDirection =>
       isArabic ? TextDirection.rtl : TextDirection.ltr;
 
-  TextAlign get _contentAlign =>
-      isArabic ? TextAlign.right : TextAlign.left;
+  TextAlign get _contentAlign => isArabic ? TextAlign.right : TextAlign.left;
 
   bool get _isDark => AppThemeController.isDark;
 
@@ -97,21 +123,13 @@ class _XRayAnalysisScreenState extends State<XRayAnalysisScreen> {
   Color _previewFill(BuildContext context) =>
       _isDark ? const Color(0xFF0F172A) : lightGray.withOpacity(0.75);
 
-  @override
-  void dispose() {
-    searchController.dispose();
-    historySearchController.dispose();
-    previewTransformationController?.dispose();
-    super.dispose();
+  String _safeString(dynamic value, {String fallback = ''}) {
+    return XRayAnalysisUtils.safeString(value, fallback: fallback);
   }
 
-String _safeString(dynamic value, {String fallback = ''}) {
-  return XRayAnalysisUtils.safeString(value, fallback: fallback);
-}
-
-String _safeTrimmedString(dynamic value, {String fallback = ''}) {
-  return XRayAnalysisUtils.safeTrimmedString(value, fallback: fallback);
-}
+  String _safeTrimmedString(dynamic value, {String fallback = ''}) {
+    return XRayAnalysisUtils.safeTrimmedString(value, fallback: fallback);
+  }
 
   TransformationController _previewController() {
     previewTransformationController ??= TransformationController();
@@ -150,6 +168,21 @@ String _safeTrimmedString(dynamic value, {String fallback = ''}) {
   }
 
   void _openNewBlankAnalysis() {
+    if (isAnalyzing || isSavingAnalysis) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              "انتظر حتى ينتهي التحليل الحالي قبل فتح تحليل جديد.",
+              "Please wait until the current analysis finishes before opening a new one.",
+            ),
+          ),
+          backgroundColor: Colors.orange.shade700,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _resetPreviewView();
       selectedImage = null;
@@ -166,14 +199,30 @@ String _safeTrimmedString(dynamic value, {String fallback = ''}) {
     });
   }
 
-Widget _buildNewAnalysisButton({bool compact = false}) {
-  return XRayNewAnalysisButton(
-    onPressed: _openNewBlankAnalysis,
-    label: tr("فتح تحليل جديد", "Open New Analysis"),
-    compact: compact,
-  );
-}
+  Widget _buildNewAnalysisButton({bool compact = false}) {
+    return XRayNewAnalysisButton(
+      onPressed: _openNewBlankAnalysis,
+      label: tr("فتح تحليل جديد", "Open New Analysis"),
+      compact: compact,
+    );
+  }
+
   Future<void> _pickImage() async {
+    if (isAnalyzing || isSavingAnalysis) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              "انتظر حتى ينتهي التحليل الحالي قبل تغيير الصورة.",
+              "Please wait until the current analysis finishes before changing the image.",
+            ),
+          ),
+          backgroundColor: Colors.orange.shade700,
+        ),
+      );
+      return;
+    }
+
     final ImagePicker picker = ImagePicker();
 
     final XFile? image = await picker.pickImage(
@@ -206,30 +255,46 @@ Widget _buildNewAnalysisButton({bool compact = false}) {
     });
   }
 
-String _generateSuggestedTitle(String resultText) {
-  return XRayAnalysisUtils.generateSuggestedTitle(
-    resultText: resultText,
-    isArabic: isArabic,
-  );
-}
+  String _generateSuggestedTitle(String resultText) {
+    return XRayAnalysisUtils.generateSuggestedTitle(
+      resultText: resultText,
+      isArabic: isArabic,
+    );
+  }
 
-String _formatDate(dynamic ts) {
-  return XRayAnalysisUtils.formatDate(ts);
-}
+  String _formatDate(dynamic ts) => XRayAnalysisUtils.formatDate(ts);
 
-String _formatShortDate(DateTime? date) {
-  return XRayAnalysisUtils.formatShortDate(
-    date: date,
-    fallback: tr("اختر تاريخ", "Pick date"),
-  );
-}
+  String _formatShortDate(DateTime? date) {
+    return XRayAnalysisUtils.formatShortDate(
+      date: date,
+      fallback: tr("اختر تاريخ", "Pick date"),
+    );
+  }
 
-int _timestampValue(DocumentSnapshot doc) {
-  return XRayAnalysisUtils.timestampValue(doc);
-}
+  int _timestampValue(DocumentSnapshot doc) {
+    return XRayAnalysisUtils.timestampValue(doc);
+  }
 
   String _friendlyAnalysisErrorMessage(Object error) {
     final message = error.toString().toLowerCase();
+
+    if (message.contains("analysis_in_progress")) {
+      return tr(
+        "يوجد تحليل قيد التنفيذ حاليًا. يرجى الانتظار حتى يكتمل قبل بدء تحليل جديد.",
+        "An analysis is already running. Please wait until it finishes before starting a new one.",
+      );
+    }
+
+    if (message.contains("429") ||
+        message.contains("too many requests") ||
+        message.contains("quota") ||
+        message.contains("rate limit") ||
+        message.contains("resource exhausted")) {
+      return tr(
+        "تم إرسال طلبات كثيرة خلال وقت قصير. يرجى الانتظار قليلًا ثم إعادة المحاولة.",
+        "Too many analysis requests were sent in a short time. Please wait a little and try again.",
+      );
+    }
 
     if (message.contains("503") ||
         message.contains("unavailable") ||
@@ -393,48 +458,47 @@ Rules:
 ''';
   }
 
-String _formatAnalysisReportForDisplay(String text) {
-  return XRayAnalysisUtils.formatAnalysisReportForDisplay(
-    text: text,
-    isArabic: isArabic,
-  );
-}
+  String _formatAnalysisReportForDisplay(String text) {
+    return XRayAnalysisUtils.formatAnalysisReportForDisplay(
+      text: text,
+      isArabic: isArabic,
+    );
+  }
 
+  String? _normalizeConfidence(dynamic value) {
+    return XRayAnalysisUtils.normalizeConfidence(value);
+  }
 
-String? _normalizeConfidence(dynamic value) {
-  return XRayAnalysisUtils.normalizeConfidence(value);
-}
+  String? _extractConfidenceFromText(String text) {
+    return XRayAnalysisUtils.extractConfidenceFromText(text);
+  }
 
-String? _extractConfidenceFromText(String text) {
-  return XRayAnalysisUtils.extractConfidenceFromText(text);
-}
+  List<Map<String, dynamic>> _normalizeFindings(dynamic rawFindings) {
+    return XRayAnalysisUtils.normalizeFindings(rawFindings);
+  }
 
- List<Map<String, dynamic>> _normalizeFindings(dynamic rawFindings) {
-  return XRayAnalysisUtils.normalizeFindings(rawFindings);
-}
+  Map<String, dynamic>? _parseStructuredAnalysis(String rawText) {
+    return XRayAnalysisUtils.parseStructuredAnalysis(rawText);
+  }
 
-Map<String, dynamic>? _parseStructuredAnalysis(String rawText) {
-  return XRayAnalysisUtils.parseStructuredAnalysis(rawText);
-}
-
-Future<String> _saveAnalysisToFirestore({
-  required String resultText,
-  required String suggestedTitle,
-  required String? confidenceLevel,
-  required List<Map<String, dynamic>> findings,
-}) {
-  return XRayAnalysisService.saveAnalysis(
-    title: suggestedTitle,
-    resultText: resultText,
-    confidenceLevel: confidenceLevel,
-    findings: findings,
-    username: widget.username,
-    language: isArabic ? "ar" : "en",
-  );
-}
+  Future<String> _saveAnalysisToFirestore({
+    required String resultText,
+    required String suggestedTitle,
+    required String? confidenceLevel,
+    required List<Map<String, dynamic>> findings,
+  }) {
+    return XRayAnalysisService.saveAnalysis(
+      title: suggestedTitle,
+      resultText: resultText,
+      confidenceLevel: confidenceLevel,
+      findings: findings,
+      username: widget.username,
+      language: isArabic ? "ar" : "en",
+    );
+  }
 
   Future<void> _deleteAnalysis(String docId) async {
-await XRayAnalysisService.deleteAnalysis(docId);
+    await XRayAnalysisService.deleteAnalysis(docId);
     if (!mounted) return;
 
     setState(() {
@@ -496,8 +560,30 @@ await XRayAnalysisService.deleteAnalysis(docId);
 
   Future<void> _analyzeXRay() async {
     if (selectedImage == null || previewBytes == null) return;
+    if (isAnalyzing || isSavingAnalysis) return;
+
+final last = _lastAnalysisStartedAt;
+final isReAnalysis = aiResult != null;
+
+if (!isReAnalysis &&
+    last != null &&
+    DateTime.now().difference(last) < _analysisCooldown) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        tr(
+          "يرجى الانتظار قليلًا قبل بدء تحليل جديد لتجنب تجاوز حد الطلبات.",
+          "Please wait a little before starting a new analysis to avoid too many requests.",
+        ),
+      ),
+      backgroundColor: Colors.orange.shade700,
+    ),
+  );
+  return;
+}
 
     setState(() {
+      _lastAnalysisStartedAt = DateTime.now();
       isAnalyzing = true;
       isSavingAnalysis = false;
       aiResult = null;
@@ -507,16 +593,17 @@ await XRayAnalysisService.deleteAnalysis(docId);
     });
 
     try {
-final imageBytes = await _buildAdjustedImageBytes(previewBytes!);
+      final imageBytes = await _buildAdjustedImageBytes(previewBytes!);
 
-final responseText = _safeString(
-  await XRayAnalysisService.analyzeImageWithGemini(
-    apiKey: apiKey,
-    prompt: _analysisPrompt(),
-    imageBytes: imageBytes,
-    imagePath: selectedImage!.path,
-  ),
-);
+      final responseText = _safeString(
+        await XRayAnalysisService.analyzeImageWithGemini(
+          apiKey: apiKey,
+          prompt: _analysisPrompt(),
+          imageBytes: imageBytes,
+          imagePath: selectedImage!.path,
+        ),
+      );
+
       final rawText = responseText.trim().isNotEmpty
           ? responseText.trim()
           : (isArabic
@@ -525,12 +612,13 @@ final responseText = _safeString(
 
       final structured = _parseStructuredAnalysis(rawText);
 
-      final reportCandidate = structured == null
-          ? ""
-          : _safeTrimmedString(structured["report"]);
-final reportText = _formatAnalysisReportForDisplay(
-  reportCandidate.isNotEmpty ? reportCandidate : rawText,
-);
+      final reportCandidate =
+          structured == null ? "" : _safeTrimmedString(structured["report"]);
+
+      final reportText = _formatAnalysisReportForDisplay(
+        reportCandidate.isNotEmpty ? reportCandidate : rawText,
+      );
+
       final confidenceLevel = structured == null
           ? _extractConfidenceFromText(rawText)
           : _safeString(structured["confidence"]).isNotEmpty
@@ -539,13 +627,11 @@ final reportText = _formatAnalysisReportForDisplay(
 
       final findings = structured == null
           ? <Map<String, dynamic>>[]
-          : List<Map<String, dynamic>>.from(
-              (structured["findings"] as List?) ?? const [],
-            );
+          : _normalizeFindings(structured["findings"]);
 
-      final structuredTitle = structured == null
-          ? ""
-          : _safeTrimmedString(structured["title"]);
+      final structuredTitle =
+          structured == null ? "" : _safeTrimmedString(structured["title"]);
+
       final title = structuredTitle.isNotEmpty
           ? structuredTitle
           : _generateSuggestedTitle(reportText);
@@ -596,7 +682,7 @@ final reportText = _formatAnalysisReportForDisplay(
       _resetPreviewView();
       openedHistoryId = doc.id;
       currentAnalysisTitle = _safeString(data["title"]);
-aiResult = _formatAnalysisReportForDisplay(_safeString(data["result"]));
+      aiResult = _formatAnalysisReportForDisplay(_safeString(data["result"]));
       aiConfidenceLevel = _normalizeConfidence(data["confidence"]) ??
           _extractConfidenceFromText(_safeString(data["result"]));
       analysisFindings = _normalizeFindings(data["findings"]);
@@ -642,14 +728,14 @@ aiResult = _formatAnalysisReportForDisplay(_safeString(data["result"]));
     });
   }
 
-bool _matchesHistoryFilters(QueryDocumentSnapshot doc) {
-  return XRayAnalysisUtils.matchesHistoryFilters(
-    doc: doc,
-    searchQuery: historySearchQuery,
-    startDate: historyStartDate,
-    endDate: historyEndDate,
-  );
-}
+  bool _matchesHistoryFilters(QueryDocumentSnapshot doc) {
+    return XRayAnalysisUtils.matchesHistoryFilters(
+      doc: doc,
+      searchQuery: historySearchQuery,
+      startDate: historyStartDate,
+      endDate: historyEndDate,
+    );
+  }
 
   Color _confidenceColor(String level) {
     switch (level) {
@@ -687,21 +773,18 @@ bool _matchesHistoryFilters(QueryDocumentSnapshot doc) {
     }
   }
 
-Widget _buildStatusChip(String text, IconData icon) {
-  return XRayStatusChip(
-    text: text,
-    icon: icon,
-  );
-}
+  Widget _buildStatusChip(String text, IconData icon) {
+    return XRayStatusChip(text: text, icon: icon);
+  }
 
-Widget _buildConfidenceChip(String level) {
-  return XRayConfidenceChip(
-    level: level,
-    color: _confidenceColor(level),
-    label: _confidenceLabel(level),
-    icon: _confidenceIcon(level),
-  );
-}
+  Widget _buildConfidenceChip(String level) {
+    return XRayConfidenceChip(
+      level: level,
+      color: _confidenceColor(level),
+      label: _confidenceLabel(level),
+      icon: _confidenceIcon(level),
+    );
+  }
 
   Widget _buildTopHeader() {
     return LayoutBuilder(
@@ -913,17 +996,17 @@ Widget _buildConfidenceChip(String level) {
     );
   }
 
-Widget _buildHistoryDateButton({
-  required String label,
-  required IconData icon,
-  required VoidCallback onPressed,
-}) {
-  return XRayHistoryDateButton(
-    label: label,
-    icon: icon,
-    onPressed: onPressed,
-  );
-}
+  Widget _buildHistoryDateButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return XRayHistoryDateButton(
+      label: label,
+      icon: icon,
+      onPressed: onPressed,
+    );
+  }
 
   Widget _buildOpenedHistory() {
     return Column(
@@ -990,9 +1073,7 @@ Widget _buildHistoryDateButton({
                 TextField(
                   controller: historySearchController,
                   onChanged: (value) {
-                    setState(() {
-                      historySearchQuery = value;
-                    });
+                    setState(() => historySearchQuery = value);
                   },
                   textDirection: _contentDirection,
                   style: TextStyle(color: _textPrimary(context)),
@@ -1016,9 +1097,7 @@ Widget _buildHistoryDateButton({
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: lapisBlue.withOpacity(0.24),
-                      ),
+                      borderSide: BorderSide(color: lapisBlue.withOpacity(0.24)),
                     ),
                   ),
                 ),
@@ -1060,9 +1139,9 @@ Widget _buildHistoryDateButton({
         ),
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
-          stream: XRayAnalysisService.watchUserAnalyses(
-  username: widget.username,
-),
+            stream: XRayAnalysisService.watchUserAnalyses(
+              username: widget.username,
+            ),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Center(
@@ -1277,51 +1356,53 @@ Widget _buildHistoryDateButton({
       ],
     );
   }
-Widget _buildImageActionButton({
-  required VoidCallback? onPressed,
-  required IconData icon,
-  required String label,
-}) {
-  return XRayImageActionButton(
-    onPressed: onPressed,
-    icon: icon,
-    label: label,
-  );
-}
-Widget _buildAdjustmentSlider({
-  required String label,
-  required IconData icon,
-  required dynamic value,
-  required double min,
-  required double max,
-  required int divisions,
-  required ValueChanged<double> onChanged,
-}) {
-  return XRayAdjustmentSlider(
-    label: label,
-    icon: icon,
-    value: value,
-    min: min,
-    max: max,
-    divisions: divisions,
-    onChanged: onChanged,
-    isArabic: isArabic,
-    softFill: _softFill(context),
-    borderColor: _border(context),
-    textSecondary: _textSecondary(context),
-  );
-}
 
-Widget _buildFindingsOverlay({
-  required double imageWidth,
-  required double imageHeight,
-}) {
-  return XRayFindingsOverlay(
-    findings: analysisFindings,
-    imageWidth: imageWidth,
-    imageHeight: imageHeight,
-  );
-}
+  Widget _buildImageActionButton({
+    required VoidCallback? onPressed,
+    required IconData icon,
+    required String label,
+  }) {
+    return XRayImageActionButton(
+      onPressed: onPressed,
+      icon: icon,
+      label: label,
+    );
+  }
+
+  Widget _buildAdjustmentSlider({
+    required String label,
+    required IconData icon,
+    required dynamic value,
+    required double min,
+    required double max,
+    required int divisions,
+    required ValueChanged<double> onChanged,
+  }) {
+    return XRayAdjustmentSlider(
+      label: label,
+      icon: icon,
+      value: value,
+      min: min,
+      max: max,
+      divisions: divisions,
+      onChanged: onChanged,
+      isArabic: isArabic,
+      softFill: _softFill(context),
+      borderColor: _border(context),
+      textSecondary: _textSecondary(context),
+    );
+  }
+
+  Widget _buildFindingsOverlay({
+    required double imageWidth,
+    required double imageHeight,
+  }) {
+    return XRayFindingsOverlay(
+      findings: analysisFindings,
+      imageWidth: imageWidth,
+      imageHeight: imageHeight,
+    );
+  }
 
   Widget _buildPreviewImageArea({
     required bool hasImage,
@@ -1449,49 +1530,41 @@ Widget _buildFindingsOverlay({
   Widget _buildPreviewControls(bool hasImage, BoxConstraints constraints) {
     final bool isNarrow = constraints.maxWidth < 760;
 
+    final actions = Wrap(
+      spacing: isNarrow ? 8 : 10,
+      runSpacing: isNarrow ? 8 : 10,
+      alignment: isArabic ? WrapAlignment.end : WrapAlignment.start,
+      children: [
+        _buildImageActionButton(
+          onPressed: _pickImage,
+          icon: hasImage
+              ? Icons.refresh_rounded
+              : Icons.add_photo_alternate_outlined,
+          label: hasImage
+              ? tr("تغيير الصورة", "Change image")
+              : tr("اختيار صورة", "Choose image"),
+        ),
+        _buildImageActionButton(
+          onPressed: hasImage
+              ? () => setState(() => isImageFlipped = !isImageFlipped)
+              : null,
+          icon: Icons.compare_arrows_rounded,
+          label: tr("عكس الصورة", "Flip image"),
+        ),
+        _buildImageActionButton(
+          onPressed: hasImage ? _resetImageAdjustments : null,
+          icon: Icons.restart_alt_rounded,
+          label: tr("إعادة الضبط", "Reset"),
+        ),
+      ],
+    );
+
     if (isNarrow) {
       return Column(
         children: [
           Align(
-            alignment:
-                isArabic ? Alignment.centerRight : Alignment.centerLeft,
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment:
-                  isArabic ? WrapAlignment.end : WrapAlignment.start,
-              children: [
-                _buildImageActionButton(
-                  onPressed: _pickImage,
-                  icon: hasImage
-                      ? Icons.refresh_rounded
-                      : Icons.add_photo_alternate_outlined,
-                  label: hasImage
-                      ? tr("تغيير الصورة", "Change image")
-                      : tr("اختيار صورة", "Choose image"),
-                ),
-                _buildImageActionButton(
-                  onPressed: hasImage
-                      ? () {
-                          setState(() {
-                            isImageFlipped = !isImageFlipped;
-                          });
-                        }
-                      : null,
-                  icon: Icons.compare_arrows_rounded,
-                  label: tr("عكس الصورة", "Flip image"),
-                ),
-                _buildImageActionButton(
-                  onPressed: hasImage
-                      ? () {
-                          _resetImageAdjustments();
-                        }
-                      : null,
-                  icon: Icons.restart_alt_rounded,
-                  label: tr("إعادة الضبط", "Reset"),
-                ),
-              ],
-            ),
+            alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
+            child: actions,
           ),
           const SizedBox(height: 10),
           _buildAdjustmentSlider(
@@ -1502,11 +1575,7 @@ Widget _buildFindingsOverlay({
             max: 0.5,
             divisions: 20,
             onChanged: hasImage
-                ? (value) {
-                    setState(() {
-                      imageBrightness = value;
-                    });
-                  }
+                ? (value) => setState(() => imageBrightness = value)
                 : (_) {},
           ),
           const SizedBox(height: 10),
@@ -1518,11 +1587,7 @@ Widget _buildFindingsOverlay({
             max: 1.8,
             divisions: 24,
             onChanged: hasImage
-                ? (value) {
-                    setState(() {
-                      imageContrast = value;
-                    });
-                  }
+                ? (value) => setState(() => imageContrast = value)
                 : (_) {},
           ),
         ],
@@ -1533,42 +1598,7 @@ Widget _buildFindingsOverlay({
       children: [
         Align(
           alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            alignment: isArabic ? WrapAlignment.end : WrapAlignment.start,
-            children: [
-              _buildImageActionButton(
-                onPressed: _pickImage,
-                icon: hasImage
-                    ? Icons.refresh_rounded
-                    : Icons.add_photo_alternate_outlined,
-                label: hasImage
-                    ? tr("تغيير الصورة", "Change image")
-                    : tr("اختيار صورة", "Choose image"),
-              ),
-              _buildImageActionButton(
-                onPressed: hasImage
-                    ? () {
-                        setState(() {
-                          isImageFlipped = !isImageFlipped;
-                        });
-                      }
-                    : null,
-                icon: Icons.compare_arrows_rounded,
-                label: tr("عكس الصورة", "Flip image"),
-              ),
-              _buildImageActionButton(
-                onPressed: hasImage
-                    ? () {
-                        _resetImageAdjustments();
-                      }
-                    : null,
-                icon: Icons.restart_alt_rounded,
-                label: tr("إعادة الضبط", "Reset"),
-              ),
-            ],
-          ),
+          child: actions,
         ),
         const SizedBox(height: 10),
         Row(
@@ -1582,11 +1612,7 @@ Widget _buildFindingsOverlay({
                 max: 0.5,
                 divisions: 20,
                 onChanged: hasImage
-                    ? (value) {
-                        setState(() {
-                          imageBrightness = value;
-                        });
-                      }
+                    ? (value) => setState(() => imageBrightness = value)
                     : (_) {},
               ),
             ),
@@ -1600,11 +1626,7 @@ Widget _buildFindingsOverlay({
                 max: 1.8,
                 divisions: 24,
                 onChanged: hasImage
-                    ? (value) {
-                        setState(() {
-                          imageContrast = value;
-                        });
-                      }
+                    ? (value) => setState(() => imageContrast = value)
                     : (_) {},
               ),
             ),
@@ -1715,9 +1737,7 @@ Widget _buildFindingsOverlay({
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: (selectedImage != null && !isAnalyzing)
-                              ? _analyzeXRay
-                              : null,
+                          onPressed: _canStartAnalysis ? _analyzeXRay : null,
                           icon: isAnalyzing
                               ? const SizedBox(
                                   width: 16,
@@ -1735,9 +1755,11 @@ Widget _buildFindingsOverlay({
                           label: Text(
                             isAnalyzing
                                 ? tr("جاري التحليل...", "Analyzing...")
-                                : (selectedImage != null && aiResult != null)
-                                    ? tr("إعادة التحليل", "Re-run Analysis")
-                                    : tr("بدء التحليل", "Start Analysis"),
+                                : isSavingAnalysis
+                                    ? tr("جارٍ حفظ التحليل...", "Saving analysis...")
+                                    : (selectedImage != null && aiResult != null)
+                                        ? tr("إعادة التحليل", "Re-run Analysis")
+                                        : tr("بدء التحليل", "Start Analysis"),
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -1782,7 +1804,8 @@ Widget _buildFindingsOverlay({
                 : tr("تم التحليل", "Analyzed"),
             aiResult == null ? Icons.pending_outlined : Icons.task_alt,
           ),
-          if (aiConfidenceLevel != null) _buildConfidenceChip(aiConfidenceLevel!),
+          if (aiConfidenceLevel != null)
+            _buildConfidenceChip(aiConfidenceLevel!),
         ],
       ),
     );
@@ -1816,15 +1839,17 @@ Widget _buildFindingsOverlay({
                 children: [
                   if (isCompact)
                     Column(
-                      crossAxisAlignment:
-                          isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                      crossAxisAlignment: isArabic
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
                             Expanded(
                               child: Align(
-                                alignment:
-                                    isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                                alignment: isArabic
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
                                 child: Text(
                                   currentAnalysisTitle ??
                                       tr("التقرير التشخيصي", "Diagnostic Report"),
@@ -1843,7 +1868,8 @@ Widget _buildFindingsOverlay({
                                 width: 34,
                                 height: 34,
                                 child: IconButton(
-                                  onPressed: () => _confirmDeleteAnalysis(openedHistoryId!),
+                                  onPressed: () =>
+                                      _confirmDeleteAnalysis(openedHistoryId!),
                                   icon: const Icon(
                                     Icons.delete_outline,
                                     color: Colors.red,
@@ -1857,10 +1883,6 @@ Widget _buildFindingsOverlay({
                           ],
                         ),
                         const SizedBox(height: 12),
-                        const Align(
-                          alignment: Alignment.centerLeft,
-                          child: SizedBox(),
-                        ),
                         Align(
                           alignment: Alignment.centerLeft,
                           child: _buildResultActions(),
