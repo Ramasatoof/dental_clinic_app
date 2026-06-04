@@ -76,6 +76,10 @@ class _MainDashboardState extends State<MainDashboard> {
     _dateController.text = DateFormat('yyyy/MM/dd').format(DateTime.now());
     upperTeeth = List.generate(16, (i) => ToothModel(id: i + 1));
     lowerTeeth = List.generate(16, (i) => ToothModel(id: 32 - i));
+    
+    // 🎨 استمع لتغييرات الـ Theme
+    AppThemeController.themeMode.addListener(_onThemeChanged);
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchPatientDentalChart();
     });
@@ -86,7 +90,14 @@ class _MainDashboardState extends State<MainDashboard> {
     searchController.dispose();
     _priceController.dispose();
     _dateController.dispose();
+    // 🎨 إلغاء الـ Listener
+    AppThemeController.themeMode.removeListener(_onThemeChanged);
     super.dispose();
+  }
+
+  // 🎨 تحديث الواجهة عند تغيير الـ Theme
+  void _onThemeChanged() {
+    setState(() {});
   }
 
   bool get _isDark => AppThemeController.isDark;

@@ -1422,11 +1422,16 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                     return DataRow(
                       selected: selected,
                       onSelectChanged: (_) => _selectTreatment(item),
-                      color: WidgetStateProperty.resolveWith<Color?>(
-                        (states) => states.contains(WidgetState.selected)
-                            ? Colors.blue.shade50
-                            : null,
-                      ),
+                    color: WidgetStateProperty.resolveWith<Color?>(
+  (states) {
+    if (states.contains(WidgetState.selected)) {
+      return _isDark
+          ? const Color(0xFF1E3A5F) // dark blue
+          : Colors.blue.shade50;
+    }
+    return null;
+  },
+),
                       cells: [
                         DataCell(Text('${index + 1}')),
                         DataCell(
@@ -1651,11 +1656,16 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                   return DataRow(
                     selected: selected,
                     onSelectChanged: (_) => _selectDetail(detail),
-                    color: WidgetStateProperty.resolveWith<Color?>(
-                      (states) => states.contains(WidgetState.selected)
-                          ? Colors.blue.shade50
-                          : null,
-                    ),
+                 color: WidgetStateProperty.resolveWith<Color?>(
+  (states) {
+    if (states.contains(WidgetState.selected)) {
+      return _isDark
+          ? const Color(0xFF1E3A5F)
+          : Colors.blue.shade50;
+    }
+    return null;
+  },
+),
                     cells: [
                       DataCell(
                         ConstrainedBox(

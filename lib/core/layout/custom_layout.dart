@@ -42,11 +42,17 @@ class CustomScaffold extends StatefulWidget {
 }
 
 class _CustomScaffoldState extends State<CustomScaffold> {
+  // ─── Static cache: يبقى محفوظ بين الصفحات طول عمر التطبيق ───
+  static String _cachedRole = '';
+  static Map<String, dynamic> _cachedPermissions = {};
+  static bool _cacheLoaded = false;
+
   String? dismissedWarningSignature;
 
-  String _currentUserRole = '';
-  Map<String, dynamic> _currentUserPermissions = {};
-  bool _currentUserLoaded = false;
+  // يقرأ من الـ cache مباشرة (مش فاضي من أول)
+  String _currentUserRole = _cachedRole;
+  Map<String, dynamic> _currentUserPermissions = _cachedPermissions;
+  bool _currentUserLoaded = _cacheLoaded;
 
   @override
   void initState() {
@@ -55,13 +61,29 @@ class _CustomScaffoldState extends State<CustomScaffold> {
   }
 
   Future<void> _loadCurrentUserAccess() async {
+    // إذا الـ cache جاهز، استخدمه فوراً بدون ما ننتظر Firestore
+    if (_cacheLoaded) {
+      if (mounted) {
+        setState(() {
+          _currentUserRole = _cachedRole;
+          _currentUserPermissions = _cachedPermissions;
+          _currentUserLoaded = true;
+        });
+      }
+      return;
+    }
+
     final access = await CustomLayoutAccessService.loadUserAccess(widget.username);
 
-    if (!mounted) return;
+    // احفظ في الـ static cache
+    _cachedRole = access.role;
+    _cachedPermissions = access.permissions;
+    _cacheLoaded = true;
 
+    if (!mounted) return;
     setState(() {
-      _currentUserRole = access.role;
-      _currentUserPermissions = access.permissions;
+      _currentUserRole = _cachedRole;
+      _currentUserPermissions = _cachedPermissions;
       _currentUserLoaded = true;
     });
   }
@@ -77,7 +99,8 @@ class _CustomScaffoldState extends State<CustomScaffold> {
 
   bool _hasPermission(String key) {
     if (_isAdminUser) return true;
-    if (!_currentUserLoaded) return false;
+    // وقت التحميل: نخلي الزر ظاهر لحد ما يتأكد من الصلاحيات
+    if (!_currentUserLoaded) return true;
     return _currentUserPermissions[key] == true;
   }
 
@@ -171,15 +194,69 @@ class _CustomScaffoldState extends State<CustomScaffold> {
     });
   }
 
-Future<void> _openPatientFile(BuildContext context) async {
-  try {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('patients')
-        .get();
+  Future<void> _openPatientFile(BuildContext context) async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('patients')
+          .get();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (snapshot.docs.isEmpty) {
+      if (snapshot.docs.isEmpty) {
+        prefs.AppPreferences.saveLastRoute('/patients');
+
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => patients.PatientsScreen(
+              username: widget.username,
+              initialArabic: widget.isArabic,
+            ),
+          ),
+        );
+        return;
+      }
+
+      final docs = snapshot.docs.toList();
+
+      docs.sort((a, b) {
+        final aData = a.data();
+        final bData = b.data();
+
+        final aSerial = int.tryParse((aData['serial_number'] ?? '').toString());
+        final bSerial = int.tryParse((bData['serial_number'] ?? '').toString());
+
+        if (aSerial != null && bSerial != null) {
+          return bSerial.compareTo(aSerial);
+        }
+
+        final aFile = int.tryParse((aData['file_number'] ?? '').toString()) ?? 0;
+        final bFile = int.tryParse((bData['file_number'] ?? '').toString()) ?? 0;
+
+        return bFile.compareTo(aFile);
+      });
+
+      final lastPatientDoc = docs.first;
+      final data = lastPatientDoc.data();
+
+      final patientName = (data['full_name'] ??
+              '${data['first_name'] ?? ''} ${data['father_name'] ?? ''} ${data['grandfather_name'] ?? ''} ${data['last_name'] ?? ''}')
+          .toString()
+          .trim();
+
+      prefs.AppPreferences.saveLastRoute('/patients');
+
+      Navigator.of(context).pushReplacementNamed(
+        '/patient-account',
+        arguments: {
+          'patientId': lastPatientDoc.id,
+          'patientName': patientName,
+          'username': widget.username,
+          'isArabic': widget.isArabic,
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+
       prefs.AppPreferences.saveLastRoute('/patients');
 
       Navigator.of(context).pushReplacement(
@@ -190,62 +267,8 @@ Future<void> _openPatientFile(BuildContext context) async {
           ),
         ),
       );
-      return;
     }
-
-    final docs = snapshot.docs.toList();
-
-    docs.sort((a, b) {
-      final aData = a.data();
-      final bData = b.data();
-
-      final aSerial = int.tryParse((aData['serial_number'] ?? '').toString());
-      final bSerial = int.tryParse((bData['serial_number'] ?? '').toString());
-
-      if (aSerial != null && bSerial != null) {
-        return bSerial.compareTo(aSerial);
-      }
-
-      final aFile = int.tryParse((aData['file_number'] ?? '').toString()) ?? 0;
-      final bFile = int.tryParse((bData['file_number'] ?? '').toString()) ?? 0;
-
-      return bFile.compareTo(aFile);
-    });
-
-    final lastPatientDoc = docs.first;
-    final data = lastPatientDoc.data();
-
-    final patientName = (data['full_name'] ??
-            '${data['first_name'] ?? ''} ${data['father_name'] ?? ''} ${data['grandfather_name'] ?? ''} ${data['last_name'] ?? ''}')
-        .toString()
-        .trim();
-
-    prefs.AppPreferences.saveLastRoute('/patients');
-
-    Navigator.of(context).pushReplacementNamed(
-      '/patient-account',
-      arguments: {
-        'patientId': lastPatientDoc.id,
-        'patientName': patientName,
-        'username': widget.username,
-        'isArabic': widget.isArabic,
-      },
-    );
-  } catch (e) {
-    if (!mounted) return;
-
-    prefs.AppPreferences.saveLastRoute('/patients');
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => patients.PatientsScreen(
-          username: widget.username,
-          initialArabic: widget.isArabic,
-        ),
-      ),
-    );
   }
-}
 
   void _openTreatmentSetup(BuildContext context) {
     prefs.AppPreferences.saveLastRoute('/setup');
@@ -1599,6 +1622,8 @@ Future<void> _openPatientFile(BuildContext context) async {
                                 ),
                               );
 
+                              // مسح الـ cache لإجبار إعادة التحميل من Firestore
+                              _cacheLoaded = false;
                               await _loadCurrentUserAccess();
                             } catch (e) {
                               if (!mounted) return;
@@ -2020,6 +2045,11 @@ Future<void> _openPatientFile(BuildContext context) async {
       ],
       onSelected: (val) {
         if (val == 1) {
+          // مسح الـ static cache عند تسجيل الخروج
+          _cachedRole = '';
+          _cachedPermissions = {};
+          _cacheLoaded = false;
+
           prefs.AppPreferences.clearSession();
           Navigator.of(context).pushNamedAndRemoveUntil(
             '/',

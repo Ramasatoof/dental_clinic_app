@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../appointments/screens/home_screen.dart';
 import '../../../core/preferences/app_preferences.dart' as prefs;
 import '../../../core/theme/app_theme_controller.dart' as theme;
+import 'package:flutter/services.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,6 +27,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool loading = false;
   bool isSignupMode = false;
   late bool isArabic;
+
+  bool hidePassword = true;
+bool hideConfirmPassword = true;
 
   String? errorMessage;
   String? successMessage;
@@ -671,16 +675,19 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    required String hint,
-    required IconData icon,
-    bool obscure = false,
-    TextInputAction textInputAction = TextInputAction.next,
-    TextInputType keyboardType = TextInputType.text,
-    VoidCallback? onSubmitted,
-  }) {
+Widget _buildTextField({
+  required TextEditingController controller,
+  required FocusNode focusNode,
+  required String hint,
+  required IconData icon,
+  bool obscure = false,
+  bool showEye = false,
+  VoidCallback? toggleEye,
+  int? maxLength,
+  TextInputAction textInputAction = TextInputAction.next,
+  TextInputType keyboardType = TextInputType.text,
+  VoidCallback? onSubmitted,
+}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18),
       decoration: BoxDecoration(
@@ -704,7 +711,19 @@ class _LoginScreenState extends State<LoginScreen> {
           hintStyle: TextStyle(color: _secondaryText),
           border: InputBorder.none,
           prefixIcon: Icon(icon, color: lapisBlue),
+          suffixIcon: showEye
+    ? IconButton(
+        icon: Icon(
+          obscure ? Icons.visibility_off : Icons.visibility,
+          color: lapisBlue,
         ),
+        onPressed: toggleEye,
+      )
+    : null,
+        ),
+        inputFormatters: maxLength != null
+    ? [LengthLimitingTextInputFormatter(maxLength)]
+    : null,
       ),
     );
   }
@@ -842,12 +861,13 @@ Image.asset(
                         const SizedBox(height: 18),
                         _buildRoleHint(usersCount),
                         SizedBox(height: isSignupMode ? 18 : 28),
-                        _buildTextField(
-                          controller: usernameController,
-                          focusNode: _userFocus,
-                          hint: tr('اسم المستخدم', 'Username'),
-                          icon: Icons.person_outline,
-                        ),
+                   _buildTextField(
+  controller: usernameController,
+  focusNode: _userFocus,
+  hint: tr('اسم المستخدم', 'Username'),
+  icon: Icons.person_outline,
+  maxLength: 10,
+),
                         if (isSignupMode) ...[
                           const SizedBox(height: 20),
                           _buildTextField(
@@ -859,17 +879,21 @@ Image.asset(
                           ),
                         ],
                         const SizedBox(height: 20),
-                        _buildTextField(
-                          controller: passwordController,
-                          focusNode: _passFocus,
-                          hint: tr('كلمة المرور', 'Password'),
-                          icon: Icons.lock_outline,
-                          obscure: true,
-                          textInputAction: isSignupMode
-                              ? TextInputAction.next
-                              : TextInputAction.done,
-                          onSubmitted: isSignupMode ? null : _submit,
-                        ),
+_buildTextField(
+  controller: passwordController,
+  focusNode: _passFocus,
+  hint: tr('كلمة المرور', 'Password'),
+  icon: Icons.lock_outline,
+  obscure: hidePassword,
+  showEye: true,
+  textInputAction: TextInputAction.done,
+  onSubmitted: _submit,
+  toggleEye: () {
+    setState(() {
+      hidePassword = !hidePassword;
+    });
+  },
+),
                         if (!isSignupMode) ...[
                           const SizedBox(height: 6),
                           Align(
@@ -906,15 +930,21 @@ Image.asset(
                         ],
                         if (isSignupMode) ...[
                           const SizedBox(height: 20),
-                          _buildTextField(
-                            controller: confirmPasswordController,
-                            focusNode: _confirmPassFocus,
-                            hint: tr('تأكيد كلمة المرور', 'Confirm Password'),
-                            icon: Icons.lock_reset_outlined,
-                            obscure: true,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: _submit,
-                          ),
+ _buildTextField(
+  controller: confirmPasswordController,
+  focusNode: _confirmPassFocus,
+  hint: tr('تأكيد كلمة المرور', 'Confirm Password'),
+  icon: Icons.lock_reset_outlined,
+  obscure: hideConfirmPassword,
+  showEye: true,
+  textInputAction: TextInputAction.done,
+  onSubmitted: _submit,
+  toggleEye: () {
+    setState(() {
+      hideConfirmPassword = !hideConfirmPassword;
+    });
+  },
+),
                         ],
                         const SizedBox(height: 30),
                         SizedBox(
