@@ -1,5 +1,4 @@
 import 'dart:html' as html;
-
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +6,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:excel/excel.dart' hide Border;
+import 'package:url_launcher/url_launcher.dart'; // تأكدي من وجود هذه المكتبة في المشروع
 import '../services/stats_service.dart';
 import '../utils/stats_utils.dart';
 import '../../../core/theme/app_theme_controller.dart';
@@ -15,6 +15,7 @@ import '../widgets/stats_pagination.dart';
 import '../widgets/stats_summary_card.dart';
 import '../widgets/stats_chart_card.dart';
 import '../widgets/stats_top_bar.dart';
+
 const Color lapisBlue = AppThemeColors.lapisBlue;
 const Color lightGray = AppThemeColors.lightGray;
 const Color lightBlue = AppThemeColors.lightBlue;
@@ -99,9 +100,28 @@ class _StatsScreenState extends State<StatsScreen> {
   Color _softFill(BuildContext context) =>
       _isDark ? const Color(0xFF1F2937) : lightGray;
 
-double _toDouble(dynamic value) {
-  return StatsUtils.toDouble(value);
-}
+  double _toDouble(dynamic value) {
+    return StatsUtils.toDouble(value);
+  }
+
+  // دالة لتنظيف رقم الهاتف وفتحه عبر الروابط
+  Future<void> _launchPhoneAction(String phone, String type) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleanPhone.isEmpty) return;
+
+    Uri url;
+    if (type == 'call') {
+      url = Uri.parse('tel:$cleanPhone');
+    } else if (type == 'wa') {
+      url = Uri.parse('https://wa.me/962$cleanPhone'); // تعديل كود الدولة حسب الحاجة
+    } else {
+      url = Uri.parse('sms:$cleanPhone');
+    }
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    }
+  }
 
   Future<void> _exportToPDF(List<QueryDocumentSnapshot> docs) async {
     final pdf = pw.Document();
@@ -262,18 +282,19 @@ double _toDouble(dynamic value) {
       ),
     );
   }
-Widget _buildTopBar() {
-  return StatsTopBar(
-    isArabic: isArabic,
-    viewType: viewType,
-    onViewChanged: (index) {
-      setState(() {
-        viewType = index;
-        currentPage = 1;
-      });
-    },
-  );
-}
+
+  Widget _buildTopBar() {
+    return StatsTopBar(
+      isArabic: isArabic,
+      viewType: viewType,
+      onViewChanged: (index) {
+        setState(() {
+          viewType = index;
+          currentPage = 1;
+        });
+      },
+    );
+  }
 
   Widget _buildRowsPerPageSelector() {
     final bool isMobile = _isMobileWidth(MediaQuery.of(context).size.width);
@@ -386,10 +407,10 @@ Widget _buildTopBar() {
 
   Widget _buildExportButton() {
     return StreamBuilder<QuerySnapshot>(
-  stream: StatsService.watchPatientsByLastVisit(
-  startDate: startDate,
-  endDate: endDate,
-),
+      stream: StatsService.watchPatientsByLastVisit(
+        startDate: startDate,
+        endDate: endDate,
+      ),
       builder: (context, snapshot) {
         final bool isMobile = _isMobileWidth(MediaQuery.of(context).size.width);
 
@@ -490,6 +511,7 @@ Widget _buildTopBar() {
       },
     );
   }
+
   Widget _buildFilterSection() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -699,23 +721,23 @@ Widget _buildTopBar() {
     );
   }
 
- Widget _buildPaginationBar(int totalPages) {
-  return StatsPagination(
-    totalPages: totalPages,
-    currentPage: _currentPage,
-    isDark: _isDark,
-    onPageChanged: (page) {
-      setState(() => currentPage = page);
-    },
-  );
-}
+  Widget _buildPaginationBar(int totalPages) {
+    return StatsPagination(
+      totalPages: totalPages,
+      currentPage: _currentPage,
+      isDark: _isDark,
+      onPageChanged: (page) {
+        setState(() => currentPage = page);
+      },
+    );
+  }
 
   Widget _buildFinancialTable() {
     return StreamBuilder<QuerySnapshot>(
-   stream: StatsService.watchPatientsByLastVisit(
-  startDate: startDate,
-  endDate: endDate,
-),
+      stream: StatsService.watchPatientsByLastVisit(
+        startDate: startDate,
+        endDate: endDate,
+      ),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -791,11 +813,12 @@ Widget _buildTopBar() {
 
         const Map<int, TableColumnWidth> columnWidths = {
           0: FlexColumnWidth(0.8),
-          1: FlexColumnWidth(4.0),
-          2: FlexColumnWidth(2.0),
+          1: FlexColumnWidth(3.0), // الاسم
+          2: FlexColumnWidth(2.6), // التلفون + الأيقونة
           3: FlexColumnWidth(2.0),
           4: FlexColumnWidth(2.0),
           5: FlexColumnWidth(2.0),
+          6: FlexColumnWidth(2.0),
         };
 
         final double cellHorizontalPadding = useMobileSizedTable ? 3 : 12;
@@ -811,7 +834,7 @@ Widget _buildTopBar() {
           color: lapisBlue,
           fontSize: useMobileSizedTable ? 11.5 : 15,
         );
-      
+
         final TextStyle nameStyle = TextStyle(
           fontWeight: FontWeight.w600,
           color: _textPrimary(context),
@@ -922,6 +945,13 @@ Widget _buildTopBar() {
                           isArabic ? Alignment.centerRight : Alignment.centerLeft,
                     ),
                     headerCell(
+                      Text(
+                        tr("رقم الهاتف", "Phone"),
+                        style: tableHeaderStyle,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    headerCell(
                       sortableHeaderCell(
                         tr("المطلوب", "Required"),
                         "required_amount",
@@ -993,6 +1023,13 @@ Widget _buildTopBar() {
                     ),
                     bodyCell(
                       Text(
+                        "-",
+                        style: totalStyle,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    bodyCell(
+                      Text(
                         "${tReq.toStringAsFixed(0)} JD",
                         textAlign: TextAlign.center,
                         style: totalStyle,
@@ -1031,6 +1068,8 @@ Widget _buildTopBar() {
         }
 
         Widget buildDataRow(Map<String, dynamic> data, int index) {
+          final String patientPhone = (data['phone'] ?? "").toString();
+
           return Container(
             decoration: BoxDecoration(
               border: Border(
@@ -1061,6 +1100,69 @@ Widget _buildTopBar() {
                       ),
                       alignment:
                           isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                    ),
+                    bodyCell(
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              patientPhone,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: _textPrimary(context),
+                                fontWeight: FontWeight.w500,
+                                fontSize: useMobileSizedTable ? 11 : 14,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          if (patientPhone.isNotEmpty)
+                            PopupMenuButton<String>(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              icon: const Icon(
+                                Icons.contact_phone,
+                                size: 18,
+                                color: lightBlue,
+                              ),
+                              onSelected: (val) => _launchPhoneAction(patientPhone, val),
+                              itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  value: 'call',
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.phone, color: Colors.green, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(tr("اتصال", "Call")),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'wa',
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.chat, color: Colors.green, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(tr("واتساب", "WhatsApp")),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'sms',
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.message, color: Colors.blue, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(tr("رسالة", "Message")),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
                     ),
                     bodyCell(
                       Text(
@@ -1109,14 +1211,15 @@ Widget _buildTopBar() {
         }
 
         return StreamBuilder<QuerySnapshot>(
-stream: StatsService.watchMaterials(),          builder: (context, materialsSnapshot) {
-    double inventoryValue = 0;
+          stream: StatsService.watchMaterials(),
+          builder: (context, materialsSnapshot) {
+            double inventoryValue = 0;
 
-if (materialsSnapshot.hasData) {
-  inventoryValue = StatsUtils.calculateInventoryValue(
-    materialsSnapshot.data!.docs,
-  );
-}
+            if (materialsSnapshot.hasData) {
+              inventoryValue = StatsUtils.calculateInventoryValue(
+                materialsSnapshot.data!.docs,
+              );
+            }
 
             Widget buildRowsList({required bool scrollable}) {
               final rows = List.generate(pagedDocs.length, (index) {
@@ -1205,17 +1308,18 @@ if (materialsSnapshot.hasData) {
 
   Widget _buildChartsView() {
     return StreamBuilder<QuerySnapshot>(
-  stream: StatsService.watchPatientsByLastVisit(
-  startDate: startDate,
-  endDate: endDate,
-),
+      stream: StatsService.watchPatientsByLastVisit(
+        startDate: startDate,
+        endDate: endDate,
+      ),
       builder: (context, patientsSnapshot) {
         if (!patientsSnapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
         return StreamBuilder<QuerySnapshot>(
-stream: StatsService.watchMaterials(),          builder: (context, materialsSnapshot) {
+          stream: StatsService.watchMaterials(),
+          builder: (context, materialsSnapshot) {
             if (!materialsSnapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
@@ -1248,11 +1352,11 @@ stream: StatsService.watchMaterials(),          builder: (context, materialsSnap
               tDebt += _toDouble(d['remaining_amount']);
             }
 
-final materialDocs = materialsSnapshot.data!.docs;
+            final materialDocs = materialsSnapshot.data!.docs;
 
-final int totalMaterials = materialDocs.length;
-final int lowStock = StatsUtils.countLowStockMaterials(materialDocs);
-final double inventoryValue = StatsUtils.calculateInventoryValue(materialDocs);
+            final int totalMaterials = materialDocs.length;
+            final int lowStock = StatsUtils.countLowStockMaterials(materialDocs);
+            final double inventoryValue = StatsUtils.calculateInventoryValue(materialDocs);
 
             final totalClinicValue = tPaid + inventoryValue;
             final collectionRate =
@@ -1403,30 +1507,30 @@ final double inventoryValue = StatsUtils.calculateInventoryValue(materialDocs);
     return spots;
   }
 
-Widget _chartCard(String title, Widget chart) {
-  return StatsChartCard(
-    isArabic: isArabic,
-    title: title,
-    chart: chart,
-  );
-}
+  Widget _chartCard(String title, Widget chart) {
+    return StatsChartCard(
+      isArabic: isArabic,
+      title: title,
+      chart: chart,
+    );
+  }
 
-Widget _summaryCard({
-  required String title,
-  required String value,
-  required IconData icon,
-  required Color color,
-  required double width,
-}) {
-  return StatsSummaryCard(
-    isArabic: isArabic,
-    title: title,
-    value: value,
-    icon: icon,
-    color: color,
-    width: width,
-  );
-}
+  Widget _summaryCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+    required double width,
+  }) {
+    return StatsSummaryCard(
+      isArabic: isArabic,
+      title: title,
+      value: value,
+      icon: icon,
+      color: color,
+      width: width,
+    );
+  }
 
   Widget _buildProfessionalLineChart(List<FlSpot> spots) {
     if (spots.isEmpty) {
@@ -1461,14 +1565,17 @@ Widget _summaryCard({
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 58,
+              reservedSize: 65, // زيادة المساحة لمحور Y
               getTitlesWidget: (value, meta) {
-                return Text(
-                  value == 0 ? "0" : "${value.toInt()}",
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: _textSecondary(context),
-                    fontWeight: FontWeight.w600,
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    value == 0 ? "0" : "${value.toInt()}",
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: _textSecondary(context),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 );
               },
@@ -1477,19 +1584,22 @@ Widget _summaryCard({
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 26,
+              reservedSize: 32, // زيادة المساحة لمحور X
               interval: spots.length <= 6 ? 1 : 2,
               getTitlesWidget: (value, meta) {
                 final index = value.toInt();
                 if (index < 0 || index >= spots.length) {
                   return const SizedBox.shrink();
                 }
-                return Text(
-                  "${index + 1}",
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: _textSecondary(context),
-                    fontWeight: FontWeight.w600,
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    "${index + 1}",
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: _textSecondary(context),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 );
               },
@@ -1609,14 +1719,17 @@ Widget _summaryCard({
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 54,
+              reservedSize: 60, // زيادة المساحة لمحور Y
               getTitlesWidget: (value, meta) {
-                return Text(
-                  value == 0 ? "0" : value.toInt().toString(),
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: _textSecondary(context),
-                    fontWeight: FontWeight.w600,
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    value == 0 ? "0" : value.toInt().toString(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: _textSecondary(context),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 );
               },
@@ -1625,7 +1738,7 @@ Widget _summaryCard({
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 44,
+              reservedSize: 50, // زيادة المساحة لمحور X
               getTitlesWidget: (value, meta) {
                 String label = "";
                 switch (value.toInt()) {
@@ -1647,7 +1760,7 @@ Widget _summaryCard({
                 }
 
                 return Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.only(top: 12),
                   child: Text(
                     label,
                     style: TextStyle(
@@ -1816,14 +1929,17 @@ Widget _summaryCard({
                 leftTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
-                    reservedSize: 36,
+                    reservedSize: 45, // زيادة المساحة لمحور Y
                     getTitlesWidget: (value, meta) {
-                      return Text(
-                        value.toInt().toString(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: _textSecondary(context),
-                          fontWeight: FontWeight.w600,
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          value.toInt().toString(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: _textSecondary(context),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       );
                     },
@@ -1832,10 +1948,10 @@ Widget _summaryCard({
                 bottomTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
-                    reservedSize: 35,
+                    reservedSize: 45, // زيادة المساحة لمحور X
                     getTitlesWidget: (value, meta) {
                       return Padding(
-                        padding: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.only(top: 12),
                         child: Text(
                           value.toInt() == 0
                               ? tr("متوفر", "Available")
@@ -1929,5 +2045,4 @@ Widget _summaryCard({
       ],
     );
   }
-
 }
