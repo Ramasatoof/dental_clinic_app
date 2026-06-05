@@ -59,6 +59,20 @@ class _PatientsScreenState extends State<PatientsScreen> {
   String? hoveredPatientRowId;
   TextEditingController searchController = TextEditingController();
 
+  final TextEditingController advancedFirstNameController =
+      TextEditingController();
+  final TextEditingController advancedFatherNameController =
+      TextEditingController();
+  final TextEditingController advancedGrandfatherNameController =
+      TextEditingController();
+  final TextEditingController advancedFamilyNameController =
+      TextEditingController();
+
+  String advancedFirstNameQuery = "";
+  String advancedFatherNameQuery = "";
+  String advancedGrandfatherNameQuery = "";
+  String advancedFamilyNameQuery = "";
+
   int? currentPage;
   int? rowsPerPage;
 
@@ -120,6 +134,10 @@ class _PatientsScreenState extends State<PatientsScreen> {
   @override
   void dispose() {
     searchController.dispose();
+    advancedFirstNameController.dispose();
+    advancedFatherNameController.dispose();
+    advancedGrandfatherNameController.dispose();
+    advancedFamilyNameController.dispose();
     serialNum.dispose();
     fileNum.dispose();
     fName.dispose();
@@ -1271,12 +1289,384 @@ Widget _buildSuccessMessageBox(BoxConstraints constraints) {
     return PatientsUtils.searchableValue(value);
   }
 
+
+  bool get _hasAdvancedNameSearch =>
+      advancedFirstNameQuery.trim().isNotEmpty ||
+      advancedFatherNameQuery.trim().isNotEmpty ||
+      advancedGrandfatherNameQuery.trim().isNotEmpty ||
+      advancedFamilyNameQuery.trim().isNotEmpty;
+
+  bool _matchesAdvancedNameSearch(Map<String, dynamic> data) {
+    bool matchesField(String fieldValue, String query) {
+      final normalizedQuery = _normalizeSearchText(query);
+      if (normalizedQuery.isEmpty) return true;
+
+      return _normalizeSearchText(fieldValue).contains(normalizedQuery);
+    }
+
+    return matchesField(
+          (data['first_name'] ?? '').toString(),
+          advancedFirstNameQuery,
+        ) &&
+        matchesField(
+          (data['father_name'] ?? '').toString(),
+          advancedFatherNameQuery,
+        ) &&
+        matchesField(
+          (data['grandfather_name'] ?? '').toString(),
+          advancedGrandfatherNameQuery,
+        ) &&
+        matchesField(
+          (data['last_name'] ?? '').toString(),
+          advancedFamilyNameQuery,
+        );
+  }
+
+  void _clearAdvancedNameSearch({bool closeDialog = false}) {
+    advancedFirstNameController.clear();
+    advancedFatherNameController.clear();
+    advancedGrandfatherNameController.clear();
+    advancedFamilyNameController.clear();
+
+    setState(() {
+      advancedFirstNameQuery = "";
+      advancedFatherNameQuery = "";
+      advancedGrandfatherNameQuery = "";
+      advancedFamilyNameQuery = "";
+      currentPage = 1;
+    });
+
+    if (closeDialog && mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  void _applyAdvancedNameSearch() {
+    setState(() {
+      advancedFirstNameQuery = advancedFirstNameController.text.trim();
+      advancedFatherNameQuery = advancedFatherNameController.text.trim();
+      advancedGrandfatherNameQuery =
+          advancedGrandfatherNameController.text.trim();
+      advancedFamilyNameQuery = advancedFamilyNameController.text.trim();
+      currentPage = 1;
+    });
+
+    Navigator.pop(context);
+  }
+
+  InputDecoration _advancedSearchInputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: _textSecondary(context)),
+      border: const OutlineInputBorder(),
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: _border(context)),
+      ),
+      focusedBorder: const OutlineInputBorder(
+        borderSide: BorderSide(color: lapisBlue, width: 1.4),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+    );
+  }
+
+  void _showAdvancedSearchDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final bool compact = MediaQuery.of(context).size.width < 700;
+
+        return Directionality(
+          textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+          child: AlertDialog(
+            backgroundColor: _surface(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.manage_search, color: lapisBlue),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    tr("بحث متقدم", "Advanced Search"),
+                    style: TextStyle(
+                      color: _textPrimary(context),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: compact ? double.maxFinite : 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!compact)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: advancedFirstNameController,
+                            textInputAction: TextInputAction.next,
+                            style: TextStyle(color: _textPrimary(context)),
+                            decoration: _advancedSearchInputDecoration(
+                              tr("اسم المريض", "Patient First Name"),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: advancedFatherNameController,
+                            textInputAction: TextInputAction.next,
+                            style: TextStyle(color: _textPrimary(context)),
+                            decoration: _advancedSearchInputDecoration(
+                              tr("اسم الأب", "Father Name"),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else ...[
+                    TextField(
+                      controller: advancedFirstNameController,
+                      textInputAction: TextInputAction.next,
+                      style: TextStyle(color: _textPrimary(context)),
+                      decoration: _advancedSearchInputDecoration(
+                        tr("اسم المريض", "Patient First Name"),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: advancedFatherNameController,
+                      textInputAction: TextInputAction.next,
+                      style: TextStyle(color: _textPrimary(context)),
+                      decoration: _advancedSearchInputDecoration(
+                        tr("اسم الأب", "Father Name"),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  if (!compact)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: advancedGrandfatherNameController,
+                            textInputAction: TextInputAction.next,
+                            style: TextStyle(color: _textPrimary(context)),
+                            decoration: _advancedSearchInputDecoration(
+                              tr("اسم الجد", "Grandfather Name"),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: advancedFamilyNameController,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) => _applyAdvancedNameSearch(),
+                            style: TextStyle(color: _textPrimary(context)),
+                            decoration: _advancedSearchInputDecoration(
+                              tr("اسم العائلة", "Family Name"),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else ...[
+                    TextField(
+                      controller: advancedGrandfatherNameController,
+                      textInputAction: TextInputAction.next,
+                      style: TextStyle(color: _textPrimary(context)),
+                      decoration: _advancedSearchInputDecoration(
+                        tr("اسم الجد", "Grandfather Name"),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: advancedFamilyNameController,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => _applyAdvancedNameSearch(),
+                      style: TextStyle(color: _textPrimary(context)),
+                      decoration: _advancedSearchInputDecoration(
+                        tr("اسم العائلة", "Family Name"),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(tr("إلغاء", "Cancel")),
+              ),
+              TextButton(
+                onPressed: () => _clearAdvancedNameSearch(closeDialog: true),
+                child: Text(tr("مسح", "Clear")),
+              ),
+              ElevatedButton.icon(
+                onPressed: _applyAdvancedNameSearch,
+                icon: const Icon(Icons.search, size: 18),
+                label: Text(tr("بحث", "Search")),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: lapisBlue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAdvancedSearchBar(bool isMobileLayout) {
+    final activeLabels = <String>[];
+
+    if (advancedFirstNameQuery.trim().isNotEmpty) {
+      activeLabels.add(
+        "${tr("اسم المريض", "First")}: ${advancedFirstNameQuery.trim()}",
+      );
+    }
+    if (advancedFatherNameQuery.trim().isNotEmpty) {
+      activeLabels.add(
+        "${tr("الأب", "Father")}: ${advancedFatherNameQuery.trim()}",
+      );
+    }
+    if (advancedGrandfatherNameQuery.trim().isNotEmpty) {
+      activeLabels.add(
+        "${tr("الجد", "Grandfather")}: ${advancedGrandfatherNameQuery.trim()}",
+      );
+    }
+    if (advancedFamilyNameQuery.trim().isNotEmpty) {
+      activeLabels.add(
+        "${tr("العائلة", "Family")}: ${advancedFamilyNameQuery.trim()}",
+      );
+    }
+
+    final searchButton = ElevatedButton.icon(
+      onPressed: _showAdvancedSearchDialog,
+      icon: const Icon(Icons.manage_search, size: 20),
+      label: Text(tr("بحث متقدم", "Advanced Search")),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: lapisBlue,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+
+    final clearButton = OutlinedButton.icon(
+      onPressed: _hasAdvancedNameSearch ? () => _clearAdvancedNameSearch() : null,
+      icon: const Icon(Icons.close, size: 18),
+      label: Text(tr("مسح البحث", "Clear Search")),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+
+    return Align(
+      alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: isMobileLayout ? double.infinity : 520,
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: _surface(context),
+            border: Border.all(
+              color: _hasAdvancedNameSearch
+                  ? lapisBlue.withOpacity(0.35)
+                  : _border(context),
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: isMobileLayout
+              ? Column(
+                  crossAxisAlignment:
+                      isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(width: double.infinity, child: searchButton),
+                    if (_hasAdvancedNameSearch) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment:
+                            isArabic ? WrapAlignment.end : WrapAlignment.start,
+                        children: activeLabels
+                            .map(
+                              (label) => Chip(
+                                label: Text(label),
+                                backgroundColor: lapisBlue.withOpacity(0.08),
+                                labelStyle: const TextStyle(
+                                  color: lapisBlue,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(width: double.infinity, child: clearButton),
+                    ],
+                  ],
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    searchButton,
+                    if (_hasAdvancedNameSearch) ...[
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          alignment:
+                              isArabic ? WrapAlignment.end : WrapAlignment.start,
+                          children: activeLabels
+                              .map(
+                                (label) => Chip(
+                                  label: Text(label),
+                                  backgroundColor: lapisBlue.withOpacity(0.08),
+                                  labelStyle: const TextStyle(
+                                    color: lapisBlue,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      clearButton,
+                    ],
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
   List<QueryDocumentSnapshot> _prepareDocs(QuerySnapshot snapshot) {
     final normalizedQuery = _normalizeSearchText(searchQuery);
     final queryDigits = _searchDigitsOnly(searchQuery);
 
     var docs = snapshot.docs.where((d) {
       var data = d.data() as Map<String, dynamic>;
+
+      if (!_matchesAdvancedNameSearch(data)) {
+        return false;
+      }
+
+      if (normalizedQuery.isEmpty && queryDigits.isEmpty) {
+        return true;
+      }
 
       final fullName =
           "${data['first_name'] ?? ""} ${data['father_name'] ?? ""} ${data['grandfather_name'] ?? ""} ${data['last_name'] ?? ""}";
@@ -3221,7 +3611,9 @@ Widget _buildPaginationBar(int totalPages) {
                             : _buildDesktopHeader(snapshot);
                       },
                     ),
-                    SizedBox(height: isMobileLayout ? 14 : 25),
+                    SizedBox(height: isMobileLayout ? 12 : 18),
+                    _buildAdvancedSearchBar(isMobileLayout),
+                    SizedBox(height: isMobileLayout ? 14 : 18),
                     Expanded(
                       child: StreamBuilder<QuerySnapshot>(
                         stream: PatientsService.watchPatients(),
