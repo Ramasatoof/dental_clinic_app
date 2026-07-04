@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -32,6 +33,197 @@ class MainDashboard extends StatefulWidget {
   State<MainDashboard> createState() => _MainDashboardState();
 }
 
+class CustomDentalSurfacePainter extends CustomPainter {
+  final Map<String, bool> surfaces;
+  final Color fillingColor;
+  final bool isDark;
+
+  CustomDentalSurfacePainter(this.surfaces, this.fillingColor, {required this.isDark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double cx = size.width / 2;
+    final double cy = size.height / 2;
+    final double r = size.width / 2;
+    final double innerR = r * 0.4; // نصف قطر الدائرة المركزية
+
+    final paintFill = Paint()
+      ..style = PaintingStyle.fill
+      ..color = fillingColor;
+
+    final paintStroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    if (isDark) {
+      paintStroke.color = const Color(0xFF475569);
+    } else {
+      paintStroke.color = const Color(0xFFD2D6DC);
+    }
+
+    // 1. السطح الأوسط (Center) - رسم دائري كامل
+    if (surfaces['center'] == true) {
+      canvas.drawCircle(Offset(cx, cy), innerR, paintFill);
+    }
+    canvas.drawCircle(Offset(cx, cy), innerR, paintStroke);
+
+    // قيمة ثابتة لزاوية 45 درجة لحساب نقاط تلاقي الأقواس
+    const double cos45 = 0.70710678;
+
+    // 2. السطح العلوي (Top/Buccal) - رسم قوس دائري علوي
+    if (surfaces['top'] == true) {
+      final path = Path()
+        ..moveTo(cx - innerR * cos45, cy - innerR * cos45)
+        ..lineTo(cx - r * cos45, cy - r * cos45)
+        ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: r), -1.25 * math.pi, 0.5 * math.pi, false)
+        ..lineTo(cx + innerR * cos45, cy - innerR * cos45)
+        ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: innerR), -0.25 * math.pi, -0.5 * math.pi, false)
+        ..close();
+      canvas.drawPath(path, paintFill);
+    }
+    final pathTopStroke = Path()
+      ..moveTo(cx - innerR * cos45, cy - innerR * cos45)
+      ..lineTo(cx - r * cos45, cy - r * cos45)
+      ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: r), -1.25 * math.pi, 0.5 * math.pi, false)
+      ..lineTo(cx + innerR * cos45, cy - innerR * cos45)
+      ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: innerR), -0.25 * math.pi, -0.5 * math.pi, false)
+      ..close();
+    canvas.drawPath(pathTopStroke, paintStroke);
+
+    // 3. السطح السفلي (Bottom/Lingual) - رسم قوس دائري سفلي
+    if (surfaces['bottom'] == true) {
+      final path = Path()
+        ..moveTo(cx - innerR * cos45, cy + innerR * cos45)
+        ..lineTo(cx - r * cos45, cy + r * cos45)
+        ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: r), 0.75 * math.pi, -0.5 * math.pi, false)
+        ..lineTo(cx + innerR * cos45, cy + innerR * cos45)
+        ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: innerR), 0.25 * math.pi, 0.5 * math.pi, false)
+        ..close();
+      canvas.drawPath(path, paintFill);
+    }
+    final pathBottomStroke = Path()
+      ..moveTo(cx - innerR * cos45, cy + innerR * cos45)
+      ..lineTo(cx - r * cos45, cy + r * cos45)
+      ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: r), 0.75 * math.pi, -0.5 * math.pi, false)
+      ..lineTo(cx + innerR * cos45, cy + innerR * cos45)
+      ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: innerR), 0.25 * math.pi, 0.5 * math.pi, false)
+      ..close();
+    canvas.drawPath(pathBottomStroke, paintStroke);
+
+    // 4. السطح الأيسر (Left/Mesial) - رسم قوس دائري أيسر
+    if (surfaces['left'] == true) {
+      final path = Path()
+        ..moveTo(cx - innerR * cos45, cy - innerR * cos45)
+        ..lineTo(cx - r * cos45, cy - r * cos45)
+        ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: r), -1.25 * math.pi, -0.5 * math.pi, false)
+        ..lineTo(cx - innerR * cos45, cy + innerR * cos45)
+        ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: innerR), 0.75 * math.pi, 0.5 * math.pi, false)
+        ..close();
+      canvas.drawPath(path, paintFill);
+    }
+    final pathLeftStroke = Path()
+      ..moveTo(cx - innerR * cos45, cy - innerR * cos45)
+      ..lineTo(cx - r * cos45, cy - r * cos45)
+      ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: r), -1.25 * math.pi, -0.5 * math.pi, false)
+      ..lineTo(cx - innerR * cos45, cy + innerR * cos45)
+      ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: innerR), 0.75 * math.pi, 0.5 * math.pi, false)
+      ..close();
+    canvas.drawPath(pathLeftStroke, paintStroke);
+
+    // 5. السطح الأيمن (Right/Distal) - رسم قوس دائري أيمن
+    if (surfaces['right'] == true) {
+      final path = Path()
+        ..moveTo(cx + innerR * cos45, cy - innerR * cos45)
+        ..lineTo(cx + r * cos45, cy - r * cos45)
+        ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: r), -0.25 * math.pi, 0.5 * math.pi, false)
+        ..lineTo(cx + innerR * cos45, cy + innerR * cos45)
+        ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: innerR), 0.25 * math.pi, -0.5 * math.pi, false)
+        ..close();
+      canvas.drawPath(path, paintFill);
+    }
+    final pathRightStroke = Path()
+      ..moveTo(cx + innerR * cos45, cy - innerR * cos45)
+      ..lineTo(cx + r * cos45, cy - r * cos45)
+      ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: r), -0.25 * math.pi, 0.5 * math.pi, false)
+      ..lineTo(cx + innerR * cos45, cy + innerR * cos45)
+      ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: innerR), 0.25 * math.pi, -0.5 * math.pi, false)
+      ..close();
+    canvas.drawPath(pathRightStroke, paintStroke);
+
+    // رسم الدائرة الخارجية المحيطة
+    canvas.drawCircle(Offset(cx, cy), r, paintStroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomDentalSurfacePainter oldDelegate) {
+    return oldDelegate.surfaces != surfaces ||
+        oldDelegate.fillingColor != fillingColor ||
+        oldDelegate.isDark != isDark;
+  }
+}
+
+class BridgePainter extends CustomPainter {
+  final List<ToothModel> teeth;
+  final bool isUpper;
+  final bool isDark;
+  final bool isRtl; // حقل لتمرير حالة اتجاه اللغة
+
+  BridgePainter({
+    required this.teeth,
+    required this.isUpper,
+    required this.isDark,
+    required this.isRtl,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double toothWidth = 75.0; // عرض حاوية السن الفردي
+    
+    // إحداثيات Y لموقع تيجان الفكين
+    final double y = isUpper ? size.height * 0.85 : size.height * 0.10;
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    for (int i = 0; i < teeth.length - 1; i++) {
+      final current = teeth[i];
+      final next = teeth[i + 1];
+
+      // التحقق من وجود تيجان وجسور متتالية مفعلة
+      if (current.hasBridge && next.hasBridge && current.hasCrown && next.hasCrown) {
+        final colorVal = current.crownColorVal != 0 ? current.crownColorVal : 0xFF9C27B0;
+        paint.color = Color(colorVal);
+
+        final double startX;
+        final double endX;
+
+        if (isRtl) {
+          // 🔄 في حالة اللغة العربية (RTL): نعكس الترتيب البصري للمحور X أفقياً
+          startX = ((15 - i) * toothWidth) + (toothWidth / 2);
+          endX = ((15 - (i + 1)) * toothWidth) + (toothWidth / 2);
+        } else {
+          // ➡️ في حالة اللغة الإنجليزية (LTR)
+          startX = (i * toothWidth) + (toothWidth / 2);
+          endX = ((i + 1) * toothWidth) + (toothWidth / 2);
+        }
+
+        // رسم خطي الجسر المتوازيين
+        canvas.drawLine(Offset(startX, y - 4), Offset(endX, y - 4), paint);
+        canvas.drawLine(Offset(startX, y + 4), Offset(endX, y + 4), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant BridgePainter oldDelegate) {
+    return oldDelegate.teeth != teeth ||
+        oldDelegate.isUpper != isUpper ||
+        oldDelegate.isDark != isDark ||
+        oldDelegate.isRtl != isRtl;
+  }
+}
+
 class _MainDashboardState extends State<MainDashboard> {
   final TextEditingController searchController = TextEditingController();
   late bool isArabic;
@@ -45,6 +237,19 @@ class _MainDashboardState extends State<MainDashboard> {
 
   List<DocumentSnapshot> _treatmentsList = [];
   List<Map<String, dynamic>> _detailsList = [];
+  List<Map<String, dynamic>> _dashboardCategories = [];
+  bool _isLoadingCategories = true;
+
+  String _getRctImagePath(int toothId) {
+    if (toothId == 17 || toothId == 32) return 'assets/rct1732.png';
+    if (toothId == 18 || toothId == 31) return 'assets/rct1831.png';
+    if (toothId == 19 || toothId == 30) return 'assets/rct1930.png';
+    if (toothId == 1 || toothId == 16) return 'assets/rct116.png';
+    if (toothId == 2 || toothId == 15) return 'assets/rct215.png';
+    
+    final isLargeMolar = [1, 16, 2, 15, 3, 14, 17, 18, 19, 30, 31, 32].contains(toothId);
+    return isLargeMolar ? 'assets/rct1.png' : 'assets/rct.png';
+  }
 
   final List<List<ToothModel>> _undoHistoryUpper = [];
   final List<List<ToothModel>> _undoHistoryLower = [];
@@ -77,11 +282,11 @@ class _MainDashboardState extends State<MainDashboard> {
     upperTeeth = List.generate(16, (i) => ToothModel(id: i + 1));
     lowerTeeth = List.generate(16, (i) => ToothModel(id: 32 - i));
     
-    // 🎨 استمع لتغييرات الـ Theme
     AppThemeController.themeMode.addListener(_onThemeChanged);
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchPatientDentalChart();
+      _fetchDashboardCategories();
     });
   }
 
@@ -90,12 +295,10 @@ class _MainDashboardState extends State<MainDashboard> {
     searchController.dispose();
     _priceController.dispose();
     _dateController.dispose();
-    // 🎨 إلغاء الـ Listener
     AppThemeController.themeMode.removeListener(_onThemeChanged);
     super.dispose();
   }
 
-  // 🎨 تحديث الواجهة عند تغيير الـ Theme
   void _onThemeChanged() {
     setState(() {});
   }
@@ -114,6 +317,93 @@ class _MainDashboardState extends State<MainDashboard> {
   double _toDouble(dynamic v) {
     if (v is num) return v.toDouble();
     return double.tryParse(v?.toString() ?? '') ?? 0.0;
+  }
+  
+ Future<void> _fetchDashboardCategories() async {
+    try {
+      final catSnapshot = await FirebaseFirestore.instance
+          .collection('treatment_categories')
+          .get();
+
+      if (!mounted) return;
+
+      final docs = catSnapshot.docs;
+      
+      docs.sort((a, b) {
+        final aTime = a.data()['timestamp'] as Timestamp?;
+        final bTime = b.data()['timestamp'] as Timestamp?;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return aTime.compareTo(bTime);
+      });
+
+      setState(() {
+        _dashboardCategories = docs.map((doc) {
+          final data = doc.data();
+          final nameAr = data['name'] ?? '';
+          return {
+            'id': doc.id,
+            'labelAr': nameAr,
+            'labelEn': data['nameEn'] ?? nameAr,
+            'icon': _getCategoryIcon(nameAr),
+            'color': _getCategoryColor(nameAr),
+          };
+        }).toList();
+        _isLoadingCategories = false;
+      });
+    } catch (e) {
+      debugPrint('Error fetching dashboard categories: $e');
+      if (mounted) setState(() => _isLoadingCategories = false);
+    }
+  }
+
+  IconData _getCategoryIcon(String nameAr) {
+    switch (nameAr) {
+      case 'الحشوات': return Icons.opacity;
+      case 'التيجان': return Icons.brightness_5;
+      case 'الجسور': return Icons.linear_scale;
+      case 'الجزئية': return Icons.grid_on;
+      case 'لبية': return Icons.healing;
+      case 'الأجهزة': return Icons.album;
+      case 'قلع': return Icons.delete_sweep;
+      case 'معالجات لثوية': return Icons.bubble_chart;
+      case 'معالجة جراحية صغرى': return Icons.content_cut;
+      case 'معالجات أخرى': return Icons.more_horiz;
+      case 'معالجة أسنان مؤقتة': return Icons.child_care;
+      case 'معالجات لثوية ٢': return Icons.layers;
+      case 'براغي وأوتاد': return Icons.build;
+      case 'الصور الخاصة': return Icons.image;
+      case 'وقائية': return Icons.security;
+      case 'صفة الاسنان': return Icons.format_align_center;
+      case 'ملاحظات': return Icons.note;
+      case 'زرعات': return Icons.vertical_align_bottom;
+      default: return Icons.healing_outlined;
+    }
+  }
+
+  Color _getCategoryColor(String nameAr) {
+    switch (nameAr) {
+      case 'الحشوات': return Colors.blue;
+      case 'التيجان': return Colors.amber;
+      case 'الجسور': return Colors.purple;
+      case 'الجزئية': return Colors.deepOrange;
+      case 'لبية': return Colors.red;
+      case 'الأجهزة': return Colors.teal;
+      case 'قلع': return Colors.brown;
+      case 'معالجات لثوية': return Colors.green;
+      case 'معالجة جراحية صغرى': return Colors.blueGrey;
+      case 'معالجات أخرى': return Colors.grey;
+      case 'معالجة أسنان مؤقتة': return Colors.indigo;
+      case 'معالجات لثوية ٢': return Colors.pink;
+      case 'براغي وأوتاد': return Colors.cyan;
+      case 'الصور الخاصة': return Colors.black;
+      case 'وقائية': return Colors.orange;
+      case 'صفة الاسنان': return Colors.lightGreen;
+      case 'ملاحظات': return Colors.blueGrey;
+      case 'زرعات': return Colors.deepPurple;
+      default: return Colors.blueGrey;
+    }
   }
 
   Future<void> _fetchPatientDentalChart() async {
@@ -281,6 +571,7 @@ class _MainDashboardState extends State<MainDashboard> {
           tooth.hasCrown = false;
           tooth.hasAppliance = false;
           tooth.hasRCT = false;
+          tooth.hasBridge = false;
           tooth.hasImplant = false;
           tooth.isMissing = false;
           tooth.hasCaries = false;
@@ -418,7 +709,10 @@ class _MainDashboardState extends State<MainDashboard> {
     }
   }
 
-  void _deselectAll() {
+ void _deselectAll() {
+    if (_selectedTreatmentName.isNotEmpty) {
+      _queueCurrentTreatment();
+    }
     setState(() {
       for (final t in [...upperTeeth, ...lowerTeeth]) {
         t.isSelected = false;
@@ -932,27 +1226,14 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildDentalChartArea() {
     return Column(
       children: [
+        // 🌟 الحاوية العلوية محجوزة المساحة مع إخفاء الزر للحفاظ على ثبات وتناسق التصميم البصري
         Container(
           color: _isDark ? const Color(0xFF1E293B) : Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
+          child: const Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              ElevatedButton.icon(
-                onPressed: _toggleAddingMode,
-                icon: Icon(_isAddingMode ? Icons.check_circle : Icons.add_circle, color: Colors.white, size: 18),
-                label: Text(
-                  _isAddingMode ? tr('وضع الإضافة نشط', 'Adding Active') : tr('إضافة معالجة', 'Add Treatment'),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isAddingMode ? Colors.green.shade600 : const Color(0xFF26619C),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 2,
-                ),
-              ),
+              SizedBox(height: 30), // 👈 حجز نفس مسافة وارتفاع الزر الملغي بدقة دون إظهاره
             ],
           ),
         ),
@@ -989,7 +1270,6 @@ class _MainDashboardState extends State<MainDashboard> {
       ],
     );
   }
-
   Widget _buildBottomProcedurePanel() {
     return Container(
       height: 215,
@@ -1005,9 +1285,9 @@ class _MainDashboardState extends State<MainDashboard> {
               children: [
                 Expanded(flex: 1, child: _buildLeftVerticalStatusArea()),
                 VerticalDivider(width: 1, thickness: 1, color: _borderColor),
-                Expanded(flex: 8, child: _buildCenterCategoriesGridArea()),
+                Expanded(flex: 16, child: _buildCenterCategoriesGridArea()),
                 VerticalDivider(width: 1, thickness: 1, color: _borderColor),
-                Expanded(flex: 2, child: _buildRightFormsInputArea()),
+                Expanded(flex: 5, child: _buildRightFormsInputArea()),
               ],
             ),
           ),
@@ -1069,48 +1349,118 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  void _showNoteDialog() {
+ void _showNoteDialog() {
     final selectedTeeth = [...upperTeeth, ...lowerTeeth].where((t) => t.isSelected).toList();
     if (selectedTeeth.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الرجاء تحديد سن أولاً لإضافة ملاحظة'), backgroundColor: Colors.orange));
       return;
     }
 
-    final noteController = TextEditingController();
+    final canal1Controller = TextEditingController();
+    final canal2Controller = TextEditingController();
+    final canal3Controller = TextEditingController();
+    final canal4Controller = TextEditingController();
+    final generalController = TextEditingController();
+
+    // فك ترميز الملاحظات الحالية إن وجدت للسن المختار
     if (selectedTeeth.length == 1 && selectedTeeth.first.note != null) {
-      noteController.text = selectedTeeth.first.note!;
+      try {
+        final Map<String, dynamic> notesMap = jsonDecode(selectedTeeth.first.note!);
+        canal1Controller.text = notesMap['canal1']?.toString() ?? '';
+        canal2Controller.text = notesMap['canal2']?.toString() ?? '';
+        canal3Controller.text = notesMap['canal3']?.toString() ?? '';
+        canal4Controller.text = notesMap['canal4']?.toString() ?? '';
+        generalController.text = notesMap['general']?.toString() ?? '';
+      } catch (_) {
+        generalController.text = selectedTeeth.first.note!;
+      }
     }
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardBg,
-        title: Text('ملاحظة سريرية لـ ${selectedTeeth.length} سن', style: TextStyle(color: _textPrimary)),
-        content: TextField(
-          controller: noteController,
-          maxLines: 4,
-          style: TextStyle(color: _textPrimary),
-          decoration: const InputDecoration(
-            hintText: 'اكتب ملاحظتك هنا (مثال: السن يحتاج مراقبة، المريض يشعر بألم...)',
-            border: OutlineInputBorder(),
+        title: Text('🩺 ملاحظات قنوات العصب السريرية لـ ${selectedTeeth.length} سن', style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildCanalInputField('ملاحظات القناة 1 (Canal 1)', canal1Controller),
+                const SizedBox(height: 8),
+                _buildCanalInputField('ملاحظات القناة 2 (Canal 2)', canal2Controller),
+                const SizedBox(height: 8),
+                _buildCanalInputField('ملاحظات القناة 3 (Canal 3)', canal3Controller),
+                const SizedBox(height: 8),
+                _buildCanalInputField('ملاحظات القناة 4 (Canal 4)', canal4Controller),
+                const SizedBox(height: 12),
+                 const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: generalController,
+                  maxLines: 3,
+                  style: TextStyle(color: _textPrimary, fontSize: 13),
+                  decoration: const InputDecoration(
+                    labelText: 'ملاحظة عامة على السن',
+                    hintText: 'اكتب أي ملاحظات إضافية هنا...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
           ElevatedButton(
             onPressed: () {
+              // ترميز الملاحظات كـ JSON آمن ومدمج
+              final Map<String, String> notesMap = {
+                'canal1': canal1Controller.text.trim(),
+                'canal2': canal2Controller.text.trim(),
+                'canal3': canal3Controller.text.trim(),
+                'canal4': canal4Controller.text.trim(),
+                'general': generalController.text.trim(),
+              };
+
+              final jsonStr = jsonEncode(notesMap);
+
               setState(() {
                 for (final t in selectedTeeth) {
-                  t.note = noteController.text.trim();
+                  t.note = jsonStr;
                   t.isSelected = false;
                 }
               });
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ الملاحظة بنجاح'), backgroundColor: Colors.green));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('تم حفظ ملاحظات القنوات والملاحظة العامة بنجاح'),
+                  backgroundColor: Colors.green,
+                ),
+              );
             },
-            child: const Text('حفظ الملاحظة'),
+            child: const Text('حفظ الملاحظات'),
           ),
         ],
+      ),
+    );
+  }
+
+  // 🩺 دالة مساعدة لبناء حقول إدخال القنوات بشكل متناسق
+  Widget _buildCanalInputField(String label, TextEditingController controller) {
+    return TextField(
+      controller: controller,
+      style: TextStyle(color: _textPrimary, fontSize: 13),
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        border: const OutlineInputBorder(),
       ),
     );
   }
@@ -1186,26 +1536,18 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   Widget _buildCenterCategoriesGridArea() {
-    final List<Map<String, dynamic>> clinicalButtons = [
-      {'labelAr': 'الحشوات', 'labelEn': 'Fillings', 'icon': Icons.opacity, 'color': Colors.blue},
-      {'labelAr': 'التيجان', 'labelEn': 'Crowns', 'icon': Icons.brightness_5, 'color': Colors.amber},
-      {'labelAr': 'الجسور', 'labelEn': 'Bridges', 'icon': Icons.linear_scale, 'color': Colors.purple},
-      {'labelAr': 'الجزئية', 'labelEn': 'Partials', 'icon': Icons.grid_on, 'color': Colors.deepOrange},
-      {'labelAr': 'لبية', 'labelEn': 'Endodontics', 'icon': Icons.healing, 'color': Colors.red},
-      {'labelAr': 'الأجهزة', 'labelEn': 'Appliances', 'icon': Icons.album, 'color': Colors.teal},
-      {'labelAr': 'قلع', 'labelEn': 'Extractions', 'icon': Icons.delete_sweep, 'color': Colors.brown},
-      {'labelAr': 'معالجات لثوية', 'labelEn': 'Periodontics', 'icon': Icons.bubble_chart, 'color': Colors.green},
-      {'labelAr': 'معالجة جراحية صغرى', 'labelEn': 'Minor Surgery', 'icon': Icons.content_cut, 'color': Colors.blueGrey},
-      {'labelAr': 'معالجات أخرى', 'labelEn': 'Other Treatments', 'icon': Icons.more_horiz, 'color': Colors.grey},
-      {'labelAr': 'معالجة أسنان مؤقتة', 'labelEn': 'Pedodontics', 'icon': Icons.child_care, 'color': Colors.indigo},
-      {'labelAr': 'معالجات لثوية ٢', 'labelEn': 'Gum Treatments', 'icon': Icons.layers, 'color': Colors.pink},
-      {'labelAr': 'براغي وأوتاد', 'labelEn': 'Screws & Posts', 'icon': Icons.build, 'color': Colors.cyan},
-      {'labelAr': 'الصور الخاصة', 'labelEn': 'Imaging', 'icon': Icons.image, 'color': Colors.black},
-      {'labelAr': 'وقائية', 'labelEn': 'Preventive', 'icon': Icons.security, 'color': Colors.orange},
-      {'labelAr': 'صفة الاسنان', 'labelEn': 'Tooth Align', 'icon': Icons.format_align_center, 'color': Colors.lightGreen},
-      {'labelAr': 'ملاحظات', 'labelEn': 'Notes', 'icon': Icons.note, 'color': Colors.blueGrey},
-      {'labelAr': 'زرعات', 'labelEn': 'Implants', 'icon': Icons.vertical_align_bottom, 'color': Colors.deepPurple},
-    ];
+    if (_isLoadingCategories) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_dashboardCategories.isEmpty) {
+      return Center(
+        child: Text(
+          tr('لا توجد تصنيفات، يرجى التهيئة من الإعدادات', 'No categories found, setup in settings'),
+          style: TextStyle(color: _textSecondary),
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.all(6),
@@ -1217,9 +1559,9 @@ class _MainDashboardState extends State<MainDashboard> {
           mainAxisSpacing: 6,
           childAspectRatio: 4.5,
         ),
-        itemCount: clinicalButtons.length,
+        itemCount: _dashboardCategories.length,
         itemBuilder: (context, index) {
-          final btn = clinicalButtons[index];
+          final btn = _dashboardCategories[index];
           final categoryName = tr(btn['labelAr'], btn['labelEn'] ?? btn['labelAr']);
           final isSelected = _selectedCategory == btn['labelAr'];
           return InkWell(
@@ -1250,7 +1592,6 @@ class _MainDashboardState extends State<MainDashboard> {
       ),
     );
   }
-
   Widget _buildRightFormsInputArea() {
     return Container(
       padding: const EdgeInsets.all(6.0),
@@ -1276,34 +1617,19 @@ class _MainDashboardState extends State<MainDashboard> {
           const SizedBox(height: 4),
           _buildDetailPriceRow(),
           const SizedBox(height: 6),
-          ElevatedButton.icon(
-            onPressed: _selectedTreatmentName.isEmpty
-                ? null
-                : () {
-                    _queueCurrentTreatment();
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(tr('تمت إضافة المعالجة إلى قائمة الحفظ المؤقتة', 'Treatment added to temporary save queue')),
-                      backgroundColor: Colors.teal,
-                      duration: const Duration(seconds: 1),
-                    ));
-                  },
-            icon: const Icon(Icons.add_shopping_cart, size: 14),
-            label: Text(tr('إدراج المعالجة الحالية', 'Queue Current Treatment'), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12)),
-          ),
+          // 💡 تم حذف زر "إدراج المعالجة الحالية" اليدوي بالكامل لتكون العملية تلقائية بمجرد النقر في الفراغ
         ],
       ),
     );
   }
-
   Widget _buildDoctorDateRow() {
     return Row(
       children: [
-        SizedBox(width: 35, child: Text(tr('الطبيب', 'Doctor'), style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: _textPrimary), textAlign: TextAlign.right)),
+        SizedBox(width: 55, child: Text(tr('الطبيب', 'Doctor'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textPrimary), textAlign: TextAlign.right)),
         const SizedBox(width: 4),
         Expanded(child: _smallDropdown<String>(value: _selectedDoctor, items: ['Dr. Ahmed', 'Dr. Sarah', 'Dr. Ali'], onChanged: (val) => setState(() => _selectedDoctor = val!))),
         const SizedBox(width: 6),
-        SizedBox(width: 30, child: Text(tr('التاريخ', 'Date'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textPrimary), textAlign: TextAlign.right)),
+        SizedBox(width: 45, child: Text(tr('التاريخ', 'Date'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textPrimary), textAlign: TextAlign.right)),
         const SizedBox(width: 4),
         Expanded(child: _smallTextField(_dateController)),
       ],
@@ -1313,7 +1639,7 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildTreatmentShadeRow() {
     return Row(
       children: [
-        SizedBox(width: 35, child: Text(tr('المعالجة', 'Treatment'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textPrimary), textAlign: TextAlign.right)),
+        SizedBox(width: 55, child: Text(tr('المعالجة', 'Treatment'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textPrimary), textAlign: TextAlign.right)),
         const SizedBox(width: 4),
         Expanded(
           child: _smallDropdown<String>(
@@ -1332,7 +1658,11 @@ class _MainDashboardState extends State<MainDashboard> {
                 _selectedSubDetailName = '';
                 _priceController.text = (details['price'] as num? ?? 0.0).toStringAsFixed(2);
               });
-              _applyProcedure({'action': details['actionType'] ?? 'general_consultation', 'label': val}, (details['price'] as num? ?? 0.0).toDouble());
+              _applyProcedure({
+                'action': details['actionType'] ?? 'general_consultation', 
+                'label': val,
+                'color': details['color'] // 🎨 تمرير لون المعالجة هنا
+              }, (details['price'] as num? ?? 0.0).toDouble());
             },
           ),
         ),
@@ -1345,7 +1675,7 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildDetailPriceRow() {
     return Row(
       children: [
-        SizedBox(width: 35, child: Text(tr('تفاصيل', 'Details'), style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: _textPrimary), textAlign: TextAlign.right)),
+        SizedBox(width: 55, child: Text(tr('تفاصيل', 'Details'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textPrimary), textAlign: TextAlign.right)),
         const SizedBox(width: 4),
         Expanded(
           child: _smallDropdown<String>(
@@ -1357,13 +1687,25 @@ class _MainDashboardState extends State<MainDashboard> {
               setState(() => _selectedSubDetailName = val);
               if (_selectedTreatmentData != null) {
                 final price = (_selectedTreatmentData!['price'] as num? ?? 0.0).toDouble();
-                _applyProcedure({'action': _selectedTreatmentData!['actionType'] ?? 'general_consultation', 'label': '$_selectedTreatmentName ($val)'}, price);
+                
+                // البحث عن لون التفصيل المختار تحديداً
+                final subDetail = _detailsList.firstWhere(
+                  (element) => element['name'] == val,
+                  orElse: () => <String, dynamic>{},
+                );
+                final chosenColor = subDetail['color'] ?? _selectedTreatmentData!['color'];
+
+                _applyProcedure({
+                  'action': _selectedTreatmentData!['actionType'] ?? 'general_consultation', 
+                  'label': '$_selectedTreatmentName ($val)',
+                  'color': chosenColor // 🎨 تمرير لون التفصيل الفرعي المخصص
+                }, price);
               }
             },
           ),
         ),
         const SizedBox(width: 6),
-        SizedBox(width: 30, child: Text(tr('سعر', 'Price'), style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: _textPrimary), textAlign: TextAlign.right)),
+        SizedBox(width: 30, child: Text(tr('سعر', 'Price'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textPrimary), textAlign: TextAlign.right)),
         const SizedBox(width: 4),
         Expanded(child: _smallTextField(_priceController)),
       ],
@@ -1372,7 +1714,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
   Widget _smallDropdown<T>({T? value, required List<T> items, String? hint, required ValueChanged<T?> onChanged}) {
     return Container(
-      height: 22,
+      height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(border: Border.all(color: _borderColor), borderRadius: BorderRadius.circular(3)),
       child: DropdownButton<T>(
@@ -1390,7 +1732,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
   Widget _smallTextField(TextEditingController controller) {
     return SizedBox(
-      height: 22,
+      height: 28,
       child: TextField(
         controller: controller,
         style: TextStyle(fontSize: 10, color: _textPrimary),
@@ -1448,28 +1790,93 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  Widget _buildToothWidget(ToothModel tooth, bool isUpper) {
+ Widget _buildToothWidget(ToothModel tooth, bool isUpper) {
     final imagePath = _getToothImagePath(tooth.id);
     final hasFilling = tooth.surfaces.values.any((v) => v == true);
     final hasNote = tooth.note != null && tooth.note!.isNotEmpty;
 
-    String hoverMessage = '${isArabic ? 'السن رقم' : 'Tooth'} ${tooth.id}';
-    if (hasNote) hoverMessage += '\n${isArabic ? 'ملاحظة:' : 'Note:'} ${tooth.note}';
-    if (tooth.treatmentsHistory.isNotEmpty) hoverMessage += '\n${isArabic ? 'سجل العلاج:' : 'History:'}\n• ${tooth.treatmentsHistory.join('\n• ')}';
+    // 🌟 عرض الترقيم بنظام الأرباع الأربعة (FDI) في سحابة التنبيه
+    final fdiId = _getFdiToothNumber(tooth.id);
+    String hoverMessage = '${isArabic ? 'السن' : 'Tooth'} $fdiId';
+    
+    if (tooth.treatmentsHistory.isNotEmpty) {
+      hoverMessage += ' | ${isArabic ? 'العلاج:' : 'Treat:'} ${tooth.treatmentsHistory.join(', ')}';
+    }
+
+    if (hasNote) {
+      try {
+        final Map<String, dynamic> notesMap = jsonDecode(tooth.note!);
+        final c1 = notesMap['canal1']?.toString() ?? '';
+        final c2 = notesMap['canal2']?.toString() ?? '';
+        final c3 = notesMap['canal3']?.toString() ?? '';
+        final c4 = notesMap['canal4']?.toString() ?? '';
+        final c5 = notesMap['notes'] ?? '';
+        
+        List<String> activeNotes = [];
+        if (c1.isNotEmpty) activeNotes.add('C1: $c1');
+        if (c2.isNotEmpty) activeNotes.add('C2: $c2');
+        if (c3.isNotEmpty) activeNotes.add('C3: $c3');
+        if (c4.isNotEmpty) activeNotes.add('C4: $c4');
+        if (c5.toString().isNotEmpty) activeNotes.add('Gen: $c5');
+
+        if (activeNotes.isNotEmpty) {
+          hoverMessage += ' | ${isArabic ? 'الملاحظات:' : 'Notes:'} ${activeNotes.join(' - ')}';
+        }
+      } catch (_) {
+        hoverMessage += ' | ${isArabic ? 'الملاحظة:' : 'Note:'} ${tooth.note}';
+      }
+    }
+
+    final Color tooltipBg = _isDark ? const Color(0xFF1E293B) : Colors.white;
+    final Color tooltipText = _isDark ? Colors.white : Colors.black87;
+    final Color tooltipBorder = _isDark ? const Color(0xFF334155) : Colors.grey.shade300;
 
     return Tooltip(
-      message: hoverMessage,
+      message: hoverMessage.trim(),
       preferBelow: !isUpper,
-      textStyle: const TextStyle(color: Colors.white, fontSize: 12),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.85), borderRadius: BorderRadius.circular(6)),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: tooltipBg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: tooltipBorder, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(_isDark ? 0.3 : 0.08),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      textStyle: TextStyle(
+        color: tooltipText, 
+        fontSize: 12, 
+        fontWeight: FontWeight.w600,
+        height: 1.4,
+      ),
       child: GestureDetector(
         onTap: () => setState(() => tooth.isSelected = !tooth.isSelected),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isUpper) ...[
-              SizedBox(height: 24, child: hasNote ? const Icon(Icons.speaker_notes, color: Colors.amber, size: 22) : const SizedBox.shrink()),
-              Text('${tooth.id}', style: TextStyle(fontSize: 15, fontWeight: tooth.isSelected ? FontWeight.bold : FontWeight.normal, color: tooth.isSelected ? Colors.blue : _textPrimary)),
+              SizedBox(
+                height: 24, 
+                child: hasNote 
+                    ? GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          setState(() {
+                            _deselectAll();
+                            tooth.isSelected = true;
+                          });
+                          _showNoteDialog();
+                        },
+                        child: const Icon(Icons.speaker_notes, color: Colors.amber, size: 22),
+                      ) 
+                    : const SizedBox.shrink(),
+              ),
+              // 🌟 عرض الترقيم الجديد هنا للفك العلوي على الشاشة
+              Text('$fdiId', style: TextStyle(fontSize: 15, fontWeight: tooth.isSelected ? FontWeight.bold : FontWeight.normal, color: tooth.isSelected ? Colors.blue : _textPrimary)),
               _buildToothImageOnly(tooth, isUpper, imagePath, (tooth.id >= 9 && tooth.id <= 24)),
               const SizedBox(height: 15),
             ],
@@ -1486,8 +1893,24 @@ class _MainDashboardState extends State<MainDashboard> {
             if (!isUpper) ...[
               const SizedBox(height: 15),
               _buildToothImageOnly(tooth, isUpper, imagePath, (tooth.id >= 9 && tooth.id <= 24)),
-              Text('${tooth.id}', style: TextStyle(fontSize: 15, fontWeight: tooth.isSelected ? FontWeight.bold : FontWeight.normal, color: tooth.isSelected ? Colors.blue : _textPrimary)),
-              SizedBox(height: 24, child: hasNote ? const Icon(Icons.speaker_notes, color: Colors.amber, size: 22) : const SizedBox.shrink()),
+              // 🌟 عرض الترقيم الجديد هنا للفك السفلي على الشاشة
+              Text('$fdiId', style: TextStyle(fontSize: 15, fontWeight: tooth.isSelected ? FontWeight.bold : FontWeight.normal, color: tooth.isSelected ? Colors.blue : _textPrimary)),
+              SizedBox(
+                height: 24, 
+                child: hasNote 
+                    ? GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          setState(() {
+                            _deselectAll();
+                            tooth.isSelected = true;
+                          });
+                          _showNoteDialog();
+                        },
+                        child: const Icon(Icons.speaker_notes, color: Colors.amber, size: 22),
+                      ) 
+                    : const SizedBox.shrink(),
+              ),
             ],
           ],
         ),
@@ -1525,13 +1948,87 @@ class _MainDashboardState extends State<MainDashboard> {
       ),
     );
   }
-
   Widget _buildToothImageOnly(ToothModel tooth, bool isUpper, String imagePath, bool isLeftSide) {
     double finalScaleX = isLeftSide ? -1.0 : 1.0;
     double finalScaleY = isUpper ? 1.0 : -1.0;
+     // 🔄 قلب الأسنان المحددة أفقياً لتتطابق مع الاتجاه التشريحي الصحيح للفك
+    if ([14, 15, 16, 17, 18, 19].contains(tooth.id)) {
+      finalScaleX = -finalScaleX;
+    }
+
     if ([17, 18, 19, 30, 31, 32].contains(tooth.id)) finalScaleY = finalScaleY * -1.0;
-    final isLargeMolar = [1, 16, 2, 15, 3, 14].contains(tooth.id);
+    
+    final isLargeMolar = [1, 2, 3, 14, 15, 16, 17, 18, 19, 30, 31, 32].contains(tooth.id);
     final img = _getToothImagePath(tooth.id);
+    final isExtracted = tooth.condition == 'extracted' || tooth.condition == 'extraction';
+
+    // ⚙️===========================================================⚙️
+    //   لوحة التحكم المباشرة - غير الأرقام هنا مباشرة للتحكم بالمواقع والمقاسات:
+    // ⚙️===========================================================⚙️
+
+    // 1️⃣ أولاً: مقاسات وحجم الأشكال (الـ Scales)
+    double crownScale = 1.05; // 👈 حجم التاج للأسنان الصغيرة
+    
+    // مقاسات سحب العصب (RCT Scales) لكل سن بالتفصيل لتفادي مشكلة اختلاف الأحجام
+    double rctScale = 0.9; // الحجم الافتراضي للأسنان الصغيرة
+    if ([1, 16].contains(tooth.id)) {
+      rctScale = 1.60; // حجم العصب للسن 1 و 16 (rct116)
+    } else if ([2, 15].contains(tooth.id)) {
+      rctScale = 1.45; // حجم العصب للسن 2 و 15 (rct215)
+    } else if ([3, 14].contains(tooth.id)) {
+      rctScale = 1.20; // حجم العصب للأضراس الكبيرة 3 و 14
+    } else if (isLargeMolar) {
+      rctScale = 1.15; // حجم العصب لباقي الأضراس الكبيرة
+    }
+
+    if (isLargeMolar) {
+      crownScale = 1.35;      // 👈 حجم التاج للأضراس الكبيرة (المولرز)
+    }
+
+    // 2️⃣ ثانياً: مواقع الإزاحة للأعلى والأسفل (الـ Offsets)
+    Offset crownOffset = const Offset(0, 0);
+    Offset rctOffset = const Offset(0, 0);
+
+    // ⬆️ تحديد إحداثيات ومواقع الأسنان العلوية:
+    if (isUpper) {
+      if (isLargeMolar) {
+        crownOffset = const Offset(0, -22); // 👈 موقع التاج للأضراس الكبيرة العلوية
+        if ([1, 16].contains(tooth.id)) {
+          rctOffset = const Offset(0, -4); // موقع العصب للسن 1 و 16
+        } else if ([2, 15].contains(tooth.id)) {
+          rctOffset = const Offset(0, -4);  // موقع العصب للسن 2 و 15
+        } else if ([3, 14].contains(tooth.id)) {
+          rctOffset = const Offset(0, -4);  // موقع العصب للسن 3 و 14
+        } else {
+          rctOffset = const Offset(0, -5);  // موقع العصب لباقي الأضراس العلوية الكبيرة
+        }
+      } else {
+        crownOffset = const Offset(0, -3); // 👈 موقع التاج للأسنان الصغيرة العلوية (تم التعديل لتلتصق بالسن)
+        rctOffset = const Offset(0, 0);     // 👈 موقع العصب للأسنان الصغيرة العلوية
+      }
+    } 
+    // ⬇️ تحديد إحداثيات ومواقع الأسنان السفلية:
+    else {
+      if (isLargeMolar) {
+        crownOffset = const Offset(0, 22);  // 👈 موقع التاج للأضراس الكبيرة السفلية
+        rctOffset = const Offset(0, 15);   // 👈 موقع العصب للأضراس الكبيرة السفلية
+      } else {
+        crownOffset = const Offset(0, 3);  // 👈 موقع التاج للأسنان الصغيرة السفلية (تم التعديل لتلتصق بالسن)
+        rctOffset = const Offset(0, 0);     // 👈 موقع العصب للأسنان الصغيرة السفلية
+      }
+    }
+
+    final Offset bracesOffset = const Offset(0, 0); 
+    final Offset veneerOffset = const Offset(0, 0); 
+    final Offset implantOffset = const Offset(0, 0); 
+    
+    // ⚙️===========================================================⚙️
+
+    // تحديد قلب سحب العصب عمودياً للأضراس السفلية لتتطابق مع الجذور المتجهة للأسفل
+    double finalRctScaleY = isUpper ? 1.0 : -1.0;
+    if ([17, 18, 19, 30, 31, 32].contains(tooth.id)) {
+      finalRctScaleY = -finalRctScaleY; // قلب اتجاه العصب
+    }
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -1545,51 +2042,176 @@ class _MainDashboardState extends State<MainDashboard> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          Transform.scale(scaleY: finalScaleY, child: Image.asset(img, fit: BoxFit.contain)),
-          if (tooth.hasCrown)
-            Transform.scale(
-              scale: 1.1,
-              child: Transform.scale(scaleY: isUpper ? 1.0 : -1.0, scaleX: finalScaleX, child: Image.asset('assets/crown.png', fit: BoxFit.contain)),
+          // السن الطبيعي
+          Visibility(
+            visible: !isExtracted,
+            maintainSize: true,
+            maintainAnimation: true,
+            maintainState: true,
+            child: Transform.scale(
+              scaleX: finalScaleX, // تطبيق معامل الانعكاس الأفقي (180 درجة) على صورة السن الأساسية
+              scaleY: finalScaleY, 
+              child: Image.asset(img, fit: BoxFit.contain),
             ),
-          if (tooth.hasImplant)
-            Transform.scale(
-              scale: 0.8,
-              child: Container(
-                decoration: BoxDecoration(color: _cardBg.withOpacity(0.8), shape: BoxShape.circle),
-                child: const Icon(Icons.build, color: Colors.blueGrey, size: 40),
+          ),
+          
+          // رسم التاج
+          if (tooth.hasCrown && !isExtracted)
+            Transform.translate(
+              offset: crownOffset,
+              child: Transform.scale(
+                scale: crownScale,
+                child: Transform.scale(
+                  scaleY: isUpper ? 1.0 : -1.0, 
+                  scaleX: finalScaleX, 
+                  child: Image.asset(
+                    'assets/crown.png', 
+                    fit: BoxFit.contain,
+                    color: Color(tooth.crownColorVal),
+                    colorBlendMode: BlendMode.srcIn,
+                  ),
+                ),
               ),
             ),
-          if (tooth.condition == 'extraction' || tooth.condition == 'extracted') const Icon(Icons.close, color: Colors.red, size: 50),
-          if (tooth.hasCaries) const Positioned(top: 20, child: Icon(Icons.lens, color: Colors.red, size: 15)),
-          if (tooth.hasBraces)
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2))),
-          if (tooth.hasAbscess)
+            
+          // رسم الزرعة
+          if (tooth.hasImplant && !isExtracted)
+            Transform.translate(
+              offset: implantOffset,
+              child: Transform.scale(
+                scale: 0.8,
+                child: Container(
+                  decoration: BoxDecoration(color: _cardBg.withOpacity(0.8), shape: BoxShape.circle),
+                  child: Icon(Icons.build, color: Color(tooth.implantColorVal), size: 40),
+                ),
+              ),
+            ),
+
+          // رسم الخلع
+          if (isExtracted) 
+            Icon(
+              Icons.close, 
+              color: tooth.statusColor != Colors.transparent ? tooth.statusColor : Colors.red, 
+              size: 55,
+            ),
+
+          if (tooth.hasCaries && !isExtracted) 
+            const Positioned(top: 20, child: Icon(Icons.lens, color: Colors.red, size: 15)),
+          
+          if (tooth.hasBraces && !isExtracted)
+            Transform.translate(
+              offset: bracesOffset,
+              child: Container(
+                width: 40, 
+                height: 4, 
+                decoration: BoxDecoration(color: Color(tooth.bracesColorVal), borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+          
+          if (tooth.hasAbscess && !isExtracted)
             Positioned(
               bottom: isUpper ? 0 : null,
               top: !isUpper ? 0 : null,
               child: Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.yellow, shape: BoxShape.circle)),
             ),
-          if (tooth.hasVeneer) Icon(Icons.auto_awesome, color: Colors.cyan.shade100, size: 30),
-          if (tooth.hasRCT)
+            
+          if (tooth.hasVeneer && !isExtracted) 
+            Transform.translate(
+              offset: veneerOffset,
+              child: Icon(Icons.auto_awesome, color: Color(tooth.veneerColorVal), size: 30),
+            ),
+          
+          // رسم سحب العصب (RCT)
+          if (tooth.hasRCT && !isExtracted)
             OverflowBox(
               maxWidth: 200,
               maxHeight: 200,
-              child: Transform.scale(
-                scaleX: isLeftSide ? -1.0 : 1.0,
-                scaleY: isUpper ? 1.0 : -1.0,
-                child: Transform.translate(
-                  offset: (tooth.id == 1)
-                      ? const Offset(-4, -10)
-                      : (tooth.id == 16)
-                          ? const Offset(-5, -10)
-                          : (tooth.id == 2)
-                              ? const Offset(-3, -10)
-                              : (tooth.id == 15)
-                                  ? const Offset(-4, -10)
-                                  : isLargeMolar
-                                      ? const Offset(0, -10)
-                                      : const Offset(0, 0),
-                  child: Image.asset(isLargeMolar ? 'assets/rct1.png' : 'assets/rct.png', fit: BoxFit.contain, width: isLargeMolar ? 60.0 : 40.0),
+              child: Transform.translate(
+                offset: rctOffset,
+                child: Transform.scale(
+                  scale: rctScale,
+                  child: Transform.scale(
+                    scaleX: finalScaleX, // 👈 جعل اتجاه رسم العصب يتبع دائماً اتجاه السن الطبيعي لحل مشكلة تباعد قنوات الجذور
+                    scaleY: finalRctScaleY, 
+                    child: Transform.translate(
+                      offset: (tooth.id == 1)
+                          ? const Offset(-4, -10)
+                          : (tooth.id == 16)
+                              ? const Offset(-5, -10)
+                              : (tooth.id == 2)
+                                  ? const Offset(-3, -10)
+                                  : (tooth.id == 15)
+                                      ? const Offset(-4, -10)
+                                      : isLargeMolar
+                                          ? const Offset(0, -10)
+                                          : const Offset(0, 0),
+                      child: Image.asset(
+                        _getRctImagePath(tooth.id), 
+                        fit: BoxFit.contain, 
+                        width: isLargeMolar ? 60.0 : 40.0,
+                        color: Color(tooth.rctColorVal),
+                        colorBlendMode: BlendMode.srcIn,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+ Widget _buildTeethRow(List<ToothModel> teeth, bool isUpper) {
+    final double totalWidth = teeth.length * 75.0; // 1200 بكسل للـ 16 سن
+    final bool hasApplianceRow = teeth.any((t) => t.hasAppliance);
+
+    // ⚙️ التحكم بموقع الأجهزة الرأسي (ارتفاع شريط الأجهزة فوق الأسنان)
+    // غيّر هذه الأرقام لرفع أو خفض الشريط بالكامل
+    final double applianceTopPosition = isUpper ? 42.0 : 42.0; 
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // 1. طبقة الجسور الخلفية
+          IgnorePointer(
+            child: SizedBox(
+              width: totalWidth,
+              height: 120,
+              child: CustomPaint(
+                painter: BridgePainter(
+                  teeth: teeth,
+                  isUpper: isUpper,
+                  isDark: _isDark,
+                  isRtl: isArabic,
+                ),
+              ),
+            ),
+          ),
+          
+          // 2. طبقة الأسنان التفاعلية الوسطى
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center, 
+            children: teeth.map((t) => _buildToothWidget(t, isUpper)).toList(),
+          ),
+
+          // 3. طبقة الأجهزة الأمامية (تظهر فوق السن وتتمدد على الفك بالكامل)
+          if (hasApplianceRow)
+            Positioned(
+              top: applianceTopPosition, // 👈 التحكم بموقع الأجهزة من هنا (أعلى / أسفل)
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: SizedBox(
+                  height: 38, // ارتفاع شريط الجهاز
+                  child: Opacity(
+                    opacity: 0.85,
+                    child: Image.asset(
+                      'assets/mesh_pink.png',
+                      fit: BoxFit.fill,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1598,34 +2220,65 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  Widget _buildTeethRow(List<ToothModel> teeth, bool isUpper) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: teeth.map((t) {
-              return Container(
-                width: 60,
-                height: 120,
-                alignment: Alignment.center,
-                child: t.hasAppliance ? Opacity(opacity: 0.8, child: Image.asset('assets/mesh_pink.png', fit: BoxFit.fill, height: 40)) : const SizedBox.shrink(),
-              );
-            }).toList(),
-          ),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: teeth.map((t) => _buildToothWidget(t, isUpper)).toList()),
-        ],
+  
+ Widget _buildSurfaceGrid(ToothModel tooth) {
+    const gridSize = 38.0;
+    return SizedBox(
+      width: gridSize,
+      height: gridSize,
+      child: CustomPaint(
+        // إرجاع كلاس الرسام الأصلي الخاص بك ليعود الشكل الدائري المتناسق تماماً كما كان أول مرة
+        painter: DentalSurfacePainter(
+          tooth.surfaces,
+          isDark: _isDark,
+        ),
       ),
     );
   }
+  // 🦷 دالة لتحويل الترقيم الداخلي (1-32) إلى نظام الأرباع الأربعة (FDI) للعرض فقط
+  int _getFdiToothNumber(int id) {
+    // --- الربع الثاني (21 - 28) الفك العلوي الأيسر بصرياً ---
+    if (id == 16) return 28;
+    if (id == 15) return 27;
+    if (id == 14) return 26;
+    if (id == 13) return 25;
+    if (id == 12) return 24;
+    if (id == 11) return 23;
+    if (id == 10) return 22;
+    if (id == 9) return 21;
 
-  Widget _buildSurfaceGrid(ToothModel tooth) {
-    const gridSize = 38.0;
-    return SizedBox(width: gridSize, height: gridSize, child: CustomPaint(painter: DentalSurfacePainter(tooth.surfaces, isDark: _isDark)));
+    // --- الربع الأول (11 - 18) الفك العلوي الأيمن بصرياً ---
+    if (id == 8) return 11;
+    if (id == 7) return 12;
+    if (id == 6) return 13;
+    if (id == 5) return 14;
+    if (id == 4) return 15;
+    if (id == 3) return 16;
+    if (id == 2) return 17;
+    if (id == 1) return 18;
+
+    // --- الربع الثالث (31 - 38) الفك السفلي الأيسر بصرياً ---
+    if (id == 17) return 38;
+    if (id == 18) return 37;
+    if (id == 19) return 36;
+    if (id == 20) return 35;
+    if (id == 21) return 34;
+    if (id == 22) return 33;
+    if (id == 23) return 32;
+    if (id == 24) return 31;
+
+    // --- الربع الرابع (41 - 48) الفك السفلي الأيمن بصرياً ---
+    if (id == 25) return 41;
+    if (id == 26) return 42;
+    if (id == 27) return 43;
+    if (id == 28) return 44;
+    if (id == 29) return 45;
+    if (id == 30) return 46;
+    if (id == 31) return 47;
+    if (id == 32) return 48;
+
+    return id; // كحالة احتياطية
   }
-
   String _getToothImagePath(int id) {
     if (id == 1 || id == 16) return 'assets/tooth8.png';
     if (id == 2 || id == 15) return 'assets/tooth7.png';
@@ -1648,6 +2301,14 @@ class _MainDashboardState extends State<MainDashboard> {
     final label = treatmentInfo['label'] ?? '';
     var selectedTeeth = [...upperTeeth, ...lowerTeeth].where((t) => t.isSelected).toList();
 
+    // 🎨 استخراج اللون المخصص ديناميكياً (أو العودة للون الافتراضي)
+    int selectedTreatmentColorValue = 0xFF9C27B0; 
+    if (treatmentInfo['color'] != null) {
+      selectedTreatmentColorValue = (treatmentInfo['color'] as num).toInt();
+    } else if (_selectedTreatmentData != null && _selectedTreatmentData!.containsKey('color')) {
+      selectedTreatmentColorValue = (_selectedTreatmentData!['color'] as num).toInt();
+    }
+
     final isSpanTreatment = type == 'crown' || type == 'bridge' || type == 'appliance' || type == 'braces' || type == 'extraction';
     if (isSpanTreatment && selectedTeeth.length == 2) {
       final id1 = selectedTeeth[0].id;
@@ -1668,6 +2329,7 @@ class _MainDashboardState extends State<MainDashboard> {
       for (final t in selectedTeeth) {
         if (type == 'clear') {
           t.hasCrown = false;
+          t.hasBridge = false; // تصفير الجسر
           t.hasAppliance = false;
           t.hasRCT = false;
           t.hasImplant = false;
@@ -1684,19 +2346,39 @@ class _MainDashboardState extends State<MainDashboard> {
           t.treatmentsHistory.clear();
           t.surfaces.updateAll((k, v) => false);
         } else {
-          t.statusColor = _currentTreatmentStatus == 'completed'
-              ? Colors.green
-              : (_currentTreatmentStatus == 'planned' ? Colors.red : Colors.blue);
+          // حفظ لون المعالجة ديناميكياً كقيمة رئيسية للسن للخلع والحشوات
+          t.statusColor = Color(selectedTreatmentColorValue);
           t.lastTreatmentDate = DateTime.now();
-          if (label.isNotEmpty && !t.treatmentsHistory.contains(label)) t.treatmentsHistory.add(label);
+          if (label.isNotEmpty && !t.treatmentsHistory.contains(label)) {
+            t.treatmentsHistory.add(label);
+          }
+          
           if (type == 'rct') {
             t.hasRCT = true;
-          } else if (type == 'implant') t.hasImplant = true;
-          else if (type == 'crown') t.hasCrown = true;
-          else if (type == 'extraction') t.condition = 'extracted';
-          else if (type == 'filling') t.surfaces['center'] = true;
-          else if (type == 'veneer') t.hasVeneer = true;
-          else if (type == 'braces') t.hasBraces = true;
+            t.rctColorVal = selectedTreatmentColorValue;
+          } else if (type == 'implant') {
+            t.hasImplant = true;
+            t.implantColorVal = selectedTreatmentColorValue;
+          } else if (type == 'crown') {
+            t.hasCrown = true;
+            t.crownColorVal = selectedTreatmentColorValue;
+          } else if (type == 'bridge') {
+            t.hasCrown = true;
+            t.crownColorVal = selectedTreatmentColorValue;
+            t.hasBridge = true;
+          } else if (type == 'appliance') { // 👈 إضافة تفعيل الأجهزة هنا
+            t.hasAppliance = true;
+          } else if (type == 'extraction') {
+            t.condition = 'extracted';
+          } else if (type == 'filling') {
+            t.surfaces['center'] = true;
+          } else if (type == 'veneer') {
+            t.hasVeneer = true;
+            t.veneerColorVal = selectedTreatmentColorValue;
+          } else if (type == 'braces') {
+            t.hasBraces = true;
+            t.bracesColorVal = selectedTreatmentColorValue;
+          }
         }
       }
     });

@@ -40,5 +40,25 @@ flutter:
   uses-material-design: true
 
   assets:
-    
-    - assets/
+      - assets/logo.png
+      - assets/tooth1.png
+      - assets/tooth2.png
+      - assets/tooth3.png
+      - assets/tooth4.png
+      - assets/tooth5.png
+      - assets/tooth6.png
+      - assets/tooth7.png
+      - assets/tooth8.png
+      - assets/tooth9.png
+      - assets/tooth10.png
+      - assets/tooth11.png
+      - assets/crown.png
+      - assets/rct.png
+      - assets/rct1.png
+      - assets/rct3.png
+      - assets/rct1930.png
+      - assets/rct1831.png
+      - assets/rct1732.png
+      - assets/rct116.png
+      - assets/rct215.png
+      - assets/mesh_pink.png

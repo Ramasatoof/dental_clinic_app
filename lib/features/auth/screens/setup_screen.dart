@@ -70,6 +70,120 @@ class TreatmentItem {
   }
 }
 
+// 🎨 رسام منزلق درجات الألوان الرأسي (Hue)
+class HueSliderPainter extends CustomPainter {
+  final double currentHue;
+  HueSliderPainter(this.currentHue);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final List<Color> colors = List.generate(360, (i) => HSVColor.fromAHSV(1.0, i.toDouble(), 1.0, 1.0).toColor());
+    
+    final gradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: colors,
+    ).createShader(rect);
+
+    final paint = Paint()..shader = gradient;
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(4)), paint);
+
+    // رسم مؤشر التحديد الأفقي
+    final double selectY = (currentHue / 360.0) * size.height;
+    final markerPaint = Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 2;
+    canvas.drawRect(Rect.fromLTWH(-2, selectY - 3, size.width + 4, 6), Paint()..color = Colors.black);
+    canvas.drawRect(Rect.fromLTWH(-2, selectY - 3, size.width + 4, 6), markerPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// 🎨 رسام منزلق السطوع والعتامة الرأسي (Value)
+class ValueSliderPainter extends CustomPainter {
+  final double currentValue;
+  final double hue;
+  ValueSliderPainter(this.currentValue, this.hue);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final color = HSVColor.fromAHSV(1.0, hue, 1.0, 1.0).toColor();
+    
+    final gradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [color, Colors.black],
+    ).createShader(rect);
+
+    final paint = Paint()..shader = gradient;
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(4)), paint);
+
+    // رسم مؤشر التحديد
+    final double selectY = (1.0 - currentValue) * size.height;
+    final markerPaint = Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 2;
+    canvas.drawRect(Rect.fromLTWH(-2, selectY - 3, size.width + 4, 6), Paint()..color = Colors.black);
+    canvas.drawRect(Rect.fromLTWH(-2, selectY - 3, size.width + 4, 6), markerPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// 🎨 رسام مربع طيف الألوان الرأسي والأفقي الرئيسي مع حلقة التحديد الدائرية
+class SpectrumAreaPainter extends CustomPainter {
+  final double hue;
+  final double saturation;
+  final double value;
+
+  SpectrumAreaPainter(this.hue, this.saturation, this.value);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    
+    final hueGradient = const LinearGradient(
+      colors: [
+        Colors.red,
+        Colors.yellow,
+        Colors.green,
+        Colors.cyan,
+        Colors.blue,
+        Color(0xFFFF00FF),
+        Colors.red,
+      ],
+    ).createShader(rect);
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), Paint()..shader = hueGradient);
+
+    final satGradient = const LinearGradient(
+      begin: Alignment.bottomCenter,
+      end: Alignment.topCenter,
+      colors: [Colors.white, Colors.transparent],
+    ).createShader(rect);
+    canvas.drawRect(rect, Paint()..shader = satGradient..blendMode = BlendMode.srcOver);
+
+    final blackPaint = Paint()
+      ..color = Colors.black.withOpacity((1.0 - value).clamp(0.0, 1.0))
+      ..blendMode = BlendMode.srcOver;
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), blackPaint);
+
+    final double markerX = (hue / 360.0) * size.width;
+    final double markerY = (1.0 - saturation) * size.height;
+    
+    final markerPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+
+    canvas.drawCircle(Offset(markerX, markerY), 7.5, Paint()..color = Colors.black26);
+    canvas.drawCircle(Offset(markerX, markerY), 7.5, markerPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
 class CategoryItem {
   String id;
   String name;
@@ -128,24 +242,6 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
   static const double _mobileTreatmentsHeight = 520;
   static const double _mobileDetailsHeight = 380;
 
-  final List<Color> _availableColors = [
-    Colors.red,
-    Colors.blue,
-    Colors.green,
-    Colors.yellow,
-    Colors.orange,
-    Colors.purple,
-    Colors.cyan,
-    Colors.teal,
-    Colors.brown,
-    Colors.grey,
-    Colors.black,
-    Colors.pink,
-    Colors.indigo,
-    Colors.lime,
-    Colors.amber,
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -168,11 +264,12 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
   bool get _isDark => AppThemeController.isDark;
   Color get _pageBg => Theme.of(context).scaffoldBackgroundColor;
   Color get _cardBg => AppThemeColors.surface(context);
-  Color get _textPrimary => AppThemeColors.textPrimary(context);
-  Color get _tableHeaderBg =>
-      _isDark ? const Color(0xFF334155) : Colors.grey.shade100;
-  Color get _mutedTileBg =>
-      _isDark ? const Color(0xFF111827) : Colors.grey.withOpacity(0.07);
+  
+  Color get _textPrimary => _isDark ? Colors.white : Colors.black87;
+  Color get _textSecondary => _isDark ? Colors.white70 : Colors.grey.shade700;
+  
+  Color get _tableHeaderBg => _isDark ? const Color(0xFF334155) : Colors.grey.shade100;
+  Color get _mutedTileBg => _isDark ? const Color(0xFF111827) : Colors.grey.withOpacity(0.07);
 
   Future<void> _loadSavedLanguage() async {
     try {
@@ -199,10 +296,58 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
     try {
       final catSnapshot = await FirebaseFirestore.instance
           .collection('treatment_categories')
-          .orderBy('timestamp')
           .get();
 
-      final fetchedCategories = catSnapshot.docs.map((doc) {
+      final existingDocs = catSnapshot.docs;
+      final existingNamesAr = existingDocs.map((doc) => doc.data()['name']?.toString() ?? '').toSet();
+
+      final List<Map<String, String>> defaultCategories = [
+        {'ar': 'الحشوات', 'en': 'Fillings'},
+        {'ar': 'التيجان', 'en': 'Crowns'},
+        {'ar': 'الجسور', 'en': 'Bridges'},
+        {'ar': 'الجزئية', 'en': 'Partials'},
+        {'ar': 'لبية', 'en': 'Endodontics'},
+        {'ar': 'الأجهزة', 'en': 'Appliances'},
+        {'ar': 'قلع', 'en': 'Extractions'},
+        {'ar': 'معالجات لثوية', 'en': 'Periodontics'},
+        {'ar': 'معالجة جراحية صغرى', 'en': 'Minor Surgery'},
+        {'ar': 'معالجات أخرى', 'en': 'Other Treatments'},
+        {'ar': 'معالجة أسنان مؤقتة', 'en': 'Pedodontics'},
+        {'ar': 'معالجات لثوية ٢', 'en': 'Gum Treatments'},
+        {'ar': 'براغي وأوتاد', 'en': 'Screws & Posts'},
+        {'ar': 'الصور الخاصة', 'en': 'Imaging'},
+        {'ar': 'وقائية', 'en': 'Preventive'},
+        {'ar': 'صفة الاسنان', 'en': 'Tooth Align'},
+        {'ar': 'ملاحظات', 'en': 'Notes'},
+        {'ar': 'زرعات', 'en': 'Implants'},
+      ];
+
+      final List<Map<String, String>> missingCategories = [];
+      for (final cat in defaultCategories) {
+        if (!existingNamesAr.contains(cat['ar'])) {
+          missingCategories.add(cat);
+        }
+      }
+
+      if (missingCategories.isNotEmpty) {
+        await _seedMissingCategoriesAndTreatments(missingCategories);
+        final updatedSnapshot = await FirebaseFirestore.instance
+            .collection('treatment_categories')
+            .get();
+        existingDocs.clear();
+        existingDocs.addAll(updatedSnapshot.docs);
+      }
+
+      existingDocs.sort((a, b) {
+        final aTime = a.data()['timestamp'] as Timestamp?;
+        final bTime = b.data()['timestamp'] as Timestamp?;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return aTime.compareTo(bTime);
+      });
+
+      final fetchedCategories = existingDocs.map((doc) {
         final data = doc.data();
         return CategoryItem(
           id: doc.id,
@@ -211,29 +356,22 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
         );
       }).toList();
 
-      final treatSnapshot =
-          await FirebaseFirestore.instance.collection('treatments_setup').get();
+      final treatSnapshot = await FirebaseFirestore.instance
+          .collection('treatments_setup')
+          .get();
 
       final fetchedTreatments = treatSnapshot.docs.map((doc) {
         final data = doc.data();
-
         final rawDetails = data['details'];
         final details = rawDetails is List
             ? rawDetails.map((raw) {
-                final d = raw is Map
-                    ? Map<String, dynamic>.from(raw)
-                    : <String, dynamic>{};
-
+                final d = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
                 return SubDetail(
                   id: d['id']?.toString() ?? '',
                   name: d['name']?.toString() ?? '',
                   nameEn: d['nameEn']?.toString() ?? '',
-                  order: d['order'] is num
-                      ? (d['order'] as num).toInt()
-                      : int.tryParse(d['order']?.toString() ?? '') ?? 1,
-                  color: Color(
-                    d['color'] is int ? d['color'] as int : Colors.black.value,
-                  ),
+                  order: d['order'] is num ? (d['order'] as num).toInt() : 1,
+                  color: Color(d['color'] is int ? d['color'] as int : Colors.black.value),
                 );
               }).toList()
             : <SubDetail>[];
@@ -246,8 +384,7 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
           name: data['name']?.toString() ?? '',
           nameEn: data['nameEn']?.toString() ?? '',
           price: _toDouble(data['price']),
-          color:
-              Color(data['color'] is int ? data['color'] as int : Colors.blue.value),
+          color: Color(data['color'] is int ? data['color'] as int : Colors.blue.value),
           textCode: data['textCode']?.toString() ?? '',
           imageCode: data['imageCode']?.toString() ?? '',
           hasLab: data['hasLab'] == true,
@@ -268,9 +405,67 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
       });
     } catch (e) {
       debugPrint('Error fetching treatments setup: $e');
-      if (!mounted) return;
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حدث خطأ أثناء مزامنة البيانات: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
+  }
+
+  Future<void> _seedMissingCategoriesAndTreatments(List<Map<String, String>> missingCategories) async {
+    final db = FirebaseFirestore.instance;
+    final batch = db.batch();
+
+    int order = 0;
+    for (final cat in missingCategories) {
+      final docRef = db.collection('treatment_categories').doc();
+      batch.set(docRef, {
+        'name': cat['ar'],
+        'nameEn': cat['en'],
+        'timestamp': Timestamp.fromDate(DateTime.now().add(Duration(seconds: order))),
+      });
+      order++;
+    }
+
+    final treatSnapshot = await db.collection('treatments_setup').get();
+    final existingTreatNames = treatSnapshot.docs.map((doc) => doc.data()['name']?.toString() ?? '').toSet();
+
+    final List<Map<String, dynamic>> defaultTreatments = [
+      {'category': 'لبية', 'name': 'علاج عصب (ضاحك)', 'nameEn': 'Premolar Root Canal', 'price': 20.0, 'color': 0xFFFFB300, 'actionType': 'rct'},
+      {'category': 'لبية', 'name': 'علاج عصب (سن امامي)', 'nameEn': 'Anterior Root Canal', 'price': 15.0, 'color': 0xFF3F51B5, 'actionType': 'rct'},
+      {'category': 'لبية', 'name': 'علاج عصب (ضرس)', 'nameEn': 'Molar Root Canal', 'price': 25.0, 'color': 0xFF2196F3, 'actionType': 'rct'},
+      {'category': 'لبية', 'name': 'اعادة علاج عصب', 'nameEn': 'Root Canal Retreatment', 'price': 10.0, 'color': 0xFFF44336, 'actionType': 'rct'},
+      {'category': 'الحشوات', 'name': 'حشوة تجميلية', 'nameEn': 'Composite Filling', 'price': 15.0, 'color': 0xFF4CAF50, 'actionType': 'filling'},
+      {'category': 'التيجان', 'name': 'تاج زيركون', 'nameEn': 'Zirconia Crown', 'price': 120.0, 'color': 0xFFFFC107, 'actionType': 'crown'},
+      {'category': 'الجسور', 'name': 'جسر تجميلي', 'nameEn': 'Cosmetic Bridge', 'price': 250.0, 'color': 0xFF9C27B0, 'actionType': 'bridge'},
+      {'category': 'قلع', 'name': 'قلع عادي', 'nameEn': 'Simple Extraction', 'price': 10.0, 'color': 0xFF795548, 'actionType': 'extraction'},
+      {'category': 'زرعات', 'name': 'زرعة أسنان', 'nameEn': 'Dental Implant', 'price': 350.0, 'color': 0xFF673AB7, 'actionType': 'implant'},
+    ];
+
+    for (final treat in defaultTreatments) {
+      if (!existingTreatNames.contains(treat['name'])) {
+        final docRef = db.collection('treatments_setup').doc();
+        batch.set(docRef, {
+          'category': treat['category'],
+          'name': treat['name'],
+          'nameEn': treat['nameEn'],
+          'price': treat['price'],
+          'color': treat['color'],
+          'textCode': '',
+          'imageCode': '',
+          'hasLab': false,
+          'actionType': treat['actionType'],
+          'details': [],
+        });
+      }
+    }
+
+    await batch.commit();
   }
 
   static double _toDouble(dynamic value) {
@@ -323,49 +518,116 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
   }
 
   Future<Color?> _pickColorDialog(Color currentColor) async {
+    Color selectedColor = currentColor;
+    double hue = HSVColor.fromColor(currentColor).hue;
+    double saturation = HSVColor.fromColor(currentColor).saturation;
+    double value = HSVColor.fromColor(currentColor).value;
+
     return showDialog<Color>(
       context: context,
       builder: (ctx) => Directionality(
         textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-        child: AlertDialog(
-          title: Text(
-            tr('اختر لوناً', 'Pick a Color'),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 320),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _availableColors.map((c) {
-                return GestureDetector(
-                  onTap: () => Navigator.pop(ctx, c),
-                  child: Container(
-                    width: 45,
-                    height: 45,
-                    decoration: BoxDecoration(
-                      color: c,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: currentColor.value == c.value
-                            ? Colors.black
-                            : Colors.transparent,
-                        width: 3,
-                      ),
+        child: StatefulBuilder(
+          builder: (context, setDlgState) {
+            final activeColor = HSVColor.fromAHSV(1.0, hue, saturation, value).toColor();
+            
+            return AlertDialog(
+              backgroundColor: _cardBg,
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(tr('منتقي الألوان الطيفي', 'Spectrum Color Picker'), style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: activeColor, borderRadius: BorderRadius.circular(4)),
+                    child: Text(
+                      '#${activeColor.value.toRadixString(16).substring(2).toUpperCase()}',
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                   ),
-                );
-              }).toList(),
-            ),
-          ),
+                ],
+              ),
+              content: SizedBox(
+                width: 360,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 25,
+                      height: 200,
+                      child: GestureDetector(
+                        onVerticalDragUpdate: (details) {
+                          final double localY = details.localPosition.dy.clamp(0.0, 200.0);
+                          setDlgState(() {
+                            hue = (localY / 200.0) * 360.0;
+                          });
+                        },
+                        child: CustomPaint(
+                          painter: HueSliderPainter(hue),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    SizedBox(
+                      width: 25,
+                      height: 200,
+                      child: GestureDetector(
+                        onVerticalDragUpdate: (details) {
+                          final double localY = details.localPosition.dy.clamp(0.0, 200.0);
+                          setDlgState(() {
+                            value = 1.0 - (localY / 200.0);
+                          });
+                        },
+                        child: CustomPaint(
+                          painter: ValueSliderPainter(value, hue),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: SizedBox(
+                        height: 200,
+                        child: GestureDetector(
+                          onPanUpdate: (details) {
+                            final double localX = details.localPosition.dx.clamp(0.0, 180.0);
+                            final double localY = details.localPosition.dy.clamp(0.0, 200.0);
+                            setDlgState(() {
+                              hue = (localX / 180.0) * 360.0;
+                              saturation = 1.0 - (localY / 200.0);
+                            });
+                          },
+                          child: CustomPaint(
+                            painter: SpectrumAreaPainter(hue, saturation, value),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(tr('إلغاء', 'Cancel')),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: activeColor, foregroundColor: Colors.white),
+                  onPressed: () => Navigator.pop(ctx, activeColor),
+                  child: Text(tr('تحديد', 'Select')),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
   Future<void> _showCategoryDialog({CategoryItem? existingCategory}) async {
-    final ctrlAr = TextEditingController(text: existingCategory?.name ?? '');
-    final ctrlEn = TextEditingController(text: existingCategory?.nameEn ?? '');
+    final initialText = isArabic
+        ? (existingCategory?.name ?? '')
+        : (existingCategory?.nameEn ?? '');
+    final nameCtrl = TextEditingController(text: initialText);
 
     await showDialog<void>(
       context: context,
@@ -383,17 +645,9 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
-                  controller: ctrlAr,
+                  controller: nameCtrl,
                   decoration: InputDecoration(
-                    labelText: tr('الاسم بالعربية', 'Name in Arabic'),
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: ctrlEn,
-                  decoration: InputDecoration(
-                    labelText: tr('الاسم بالإنجليزية', 'Name in English'),
+                    labelText: tr('الاسم', 'Name'),
                     border: const OutlineInputBorder(),
                   ),
                 ),
@@ -407,9 +661,11 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                final newNameAr = ctrlAr.text.trim();
-                final newNameEn = ctrlEn.text.trim();
-                if (newNameAr.isEmpty) return;
+                final enteredName = nameCtrl.text.trim();
+                if (enteredName.isEmpty) return;
+
+                final newNameAr = isArabic ? enteredName : (existingCategory?.name ?? enteredName);
+                final newNameEn = !isArabic ? enteredName : (existingCategory?.nameEn ?? enteredName);
 
                 Navigator.pop(ctx);
                 await _saveCategory(
@@ -435,8 +691,7 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
 
     try {
       if (existingCategory == null) {
-        final docRef =
-            await FirebaseFirestore.instance.collection('treatment_categories').add({
+        final docRef = await FirebaseFirestore.instance.collection('treatment_categories').add({
           'name': newNameAr,
           'nameEn': newNameEn,
           'timestamp': FieldValue.serverTimestamp(),
@@ -552,20 +807,18 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
       return;
     }
 
-    final nameArCtrl = TextEditingController(text: existingItem?.name ?? '');
-    final nameEnCtrl = TextEditingController(text: existingItem?.nameEn ?? '');
+    final initialName = isArabic
+        ? (existingItem?.name ?? '')
+        : (existingItem?.nameEn ?? '');
+    final nameCtrl = TextEditingController(text: initialName);
     final priceCtrl = TextEditingController(
       text: existingItem == null ? '0.00' : existingItem.price.toString(),
     );
-    final textCodeCtrl =
-        TextEditingController(text: existingItem?.textCode ?? '');
-    final imageCodeCtrl =
-        TextEditingController(text: existingItem?.imageCode ?? '');
+    final textCodeCtrl = TextEditingController(text: existingItem?.textCode ?? '');
 
     Color selectedColor = existingItem?.color ?? Colors.blue;
     bool hasLab = existingItem?.hasLab ?? false;
-    String selectedActionType =
-        existingItem?.actionType ?? 'general_consultation';
+    String selectedActionType = existingItem?.actionType ?? 'general_consultation';
 
     await showDialog<void>(
       context: context,
@@ -586,13 +839,8 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _dialogTextField(
-                        controller: nameArCtrl,
-                        label: tr('الاسم بالعربية', 'Name in Arabic'),
-                      ),
-                      const SizedBox(height: 10),
-                      _dialogTextField(
-                        controller: nameEnCtrl,
-                        label: tr('الاسم بالإنجليزية', 'Name in English'),
+                        controller: nameCtrl,
+                        label: tr('الاسم', 'Name'),
                       ),
                       const SizedBox(height: 10),
                       _dialogTextField(
@@ -614,8 +862,7 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                         items: [
                           DropdownMenuItem(
                             value: 'general_consultation',
-                            child:
-                                Text(tr('كشفية / عامة', 'Consultation / General')),
+                            child: Text(tr('كشفية / عامة', 'Consultation / General')),
                           ),
                           DropdownMenuItem(
                             value: 'filling',
@@ -630,12 +877,20 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                             child: Text(tr('تاج / تلبيسة', 'Crown')),
                           ),
                           DropdownMenuItem(
+                            value: 'bridge',
+                            child: Text(tr('جسر', 'Bridge')),
+                          ),
+                          DropdownMenuItem(
                             value: 'extraction',
                             child: Text(tr('خلع', 'Extraction')),
                           ),
                           DropdownMenuItem(
                             value: 'implant',
                             child: Text(tr('زراعة', 'Implant')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'appliance',
+                            child: Text(tr('أجهزة', 'Appliance')),
                           ),
                           DropdownMenuItem(
                             value: 'veneer',
@@ -659,11 +914,6 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                       _dialogTextField(
                         controller: textCodeCtrl,
                         label: tr('الرمز نص', 'Text code'),
-                      ),
-                      const SizedBox(height: 10),
-                      _dialogTextField(
-                        controller: imageCodeCtrl,
-                        label: tr('مسار صورة الرمز', 'Icon image path'),
                       ),
                       const SizedBox(height: 14),
                       Wrap(
@@ -717,23 +967,26 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    if (nameArCtrl.text.trim().isEmpty) {
+                    final enteredName = nameCtrl.text.trim();
+                    if (enteredName.isEmpty) {
                       _showSnack(
-                        tr('يرجى إدخال اسم المعالجة',
-                            'Please enter treatment name'),
+                        tr('يرجى إدخال اسم المعالجة', 'Please enter treatment name'),
                         Colors.orange,
                       );
                       return;
                     }
 
+                    final nameAr = isArabic ? enteredName : (existingItem?.name ?? enteredName);
+                    final nameEn = !isArabic ? enteredName : (existingItem?.nameEn ?? enteredName);
+
                     Navigator.pop(ctx);
                     await _saveTreatment(
                       existingItem: existingItem,
-                      nameAr: nameArCtrl.text.trim(),
-                      nameEn: nameEnCtrl.text.trim(),
+                      nameAr: nameAr,
+                      nameEn: nameEn,
                       price: double.tryParse(priceCtrl.text) ?? 0.0,
                       textCode: textCodeCtrl.text.trim(),
-                      imageCode: imageCodeCtrl.text.trim(),
+                      imageCode: existingItem?.imageCode ?? '',
                       color: selectedColor,
                       hasLab: hasLab,
                       actionType: selectedActionType,
@@ -781,8 +1034,7 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
 
     try {
       if (existingItem == null) {
-        final docRef =
-            await FirebaseFirestore.instance.collection('treatments_setup').add({
+        final docRef = await FirebaseFirestore.instance.collection('treatments_setup').add({
           'category': _selectedCategory!.name,
           'name': nameAr,
           'nameEn': nameEn,
@@ -887,12 +1139,13 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
   Future<void> _showDetailDialog({SubDetail? existingDetail}) async {
     if (_selectedTreatment == null) return;
 
-    final nameArCtrl = TextEditingController(text: existingDetail?.name ?? '');
-    final nameEnCtrl = TextEditingController(text: existingDetail?.nameEn ?? '');
+    final initialName = isArabic
+        ? (existingDetail?.name ?? '')
+        : (existingDetail?.nameEn ?? '');
+    final nameCtrl = TextEditingController(text: initialName);
     final orderCtrl = TextEditingController(
       text: existingDetail == null ? '1' : existingDetail.order.toString(),
     );
-    Color selectedColor = existingDetail?.color ?? Colors.black;
 
     await showDialog<void>(
       context: context,
@@ -913,46 +1166,14 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _dialogTextField(
-                        controller: nameArCtrl,
-                        label: tr('الاسم بالعربية', 'Name in Arabic'),
-                      ),
-                      const SizedBox(height: 10),
-                      _dialogTextField(
-                        controller: nameEnCtrl,
-                        label: tr('الاسم بالإنجليزية', 'Name in English'),
+                        controller: nameCtrl,
+                        label: tr('التفصيل', 'Detail'),
                       ),
                       const SizedBox(height: 10),
                       _dialogTextField(
                         controller: orderCtrl,
                         label: tr('الترتيب رقم', 'Order number'),
                         keyboardType: TextInputType.number,
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Text(
-                            tr('اللون', 'Color'),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(width: 12),
-                          GestureDetector(
-                            onTap: () async {
-                              final c = await _pickColorDialog(selectedColor);
-                              if (c != null) {
-                                setDialogState(() => selectedColor = c);
-                              }
-                            },
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: selectedColor,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey),
-                              ),
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
@@ -965,17 +1186,20 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    final nameAr = nameArCtrl.text.trim();
-                    if (nameAr.isEmpty) return;
+                    final enteredName = nameCtrl.text.trim();
+                    if (enteredName.isEmpty) return;
+
+                    final nameAr = isArabic ? enteredName : (existingDetail?.name ?? enteredName);
+                    final nameEn = !isArabic ? enteredName : (existingDetail?.nameEn ?? enteredName);
 
                     Navigator.pop(ctx);
 
                     await _saveDetail(
                       existingDetail: existingDetail,
                       nameAr: nameAr,
-                      nameEn: nameEnCtrl.text.trim(),
+                      nameEn: nameEn,
                       order: int.tryParse(orderCtrl.text) ?? 1,
-                      color: selectedColor,
+                      color: existingDetail?.color ?? Colors.black,
                     );
                   },
                   child: Text(tr('حفظ', 'Save')),
@@ -1332,32 +1556,27 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
     return _panelCard(
       height: height,
       header: _panelHeader(
-        title:
-            "${tr('نوع المعالجات:', 'Treatments for:')} ${_selectedCategory?.getDisplayName(isArabic) ?? ''}",
+        title: "${tr('نوع المعالجات:', 'Treatments for:')} ${_selectedCategory?.getDisplayName(isArabic) ?? ''}",
         color: Colors.blue.shade800,
         trailing: compact
             ? Tooltip(
                 message: tr('إضافة معالجة', 'Add Treatment'),
                 child: IconButton(
-                  icon:
-                      const Icon(Icons.add_circle, color: Colors.blue, size: 26),
-                  onPressed:
-                      _selectedCategory == null ? null : () => _showTreatmentDialog(),
+                  icon: const Icon(Icons.add_circle, color: Colors.blue, size: 26),
+                  onPressed: _selectedCategory == null ? null : () => _showTreatmentDialog(),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 ),
               )
             : ElevatedButton.icon(
-                onPressed:
-                    _selectedCategory == null ? null : () => _showTreatmentDialog(),
+                onPressed: _selectedCategory == null ? null : () => _showTreatmentDialog(),
                 icon: const Icon(Icons.add, size: 18),
                 label: Text(
                   tr('إضافة معالجة', 'Add Treatment'),
                   overflow: TextOverflow.ellipsis,
                 ),
                 style: ElevatedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
               ),
       ),
@@ -1400,17 +1619,11 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                   headingRowHeight: 46,
                   columnSpacing: 20,
                   columns: [
-                    const DataColumn(
-                      label: Text(
-                        '#',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
+                    const DataColumn(label: Text('#', style: TextStyle(fontWeight: FontWeight.bold))),
                     DataColumn(label: Text(tr('المعالجة', 'Treatment'))),
                     DataColumn(label: Text(tr('اللون', 'Color'))),
                     DataColumn(label: Text(tr('السعر', 'Price'))),
                     DataColumn(label: Text(tr('الرمز نص', 'Code'))),
-                    DataColumn(label: Text(tr('الرمز صورة', 'Icon'))),
                     DataColumn(label: Text(tr('معمل', 'Lab'))),
                     DataColumn(label: Text(tr('إجراء', 'Action'))),
                   ],
@@ -1422,25 +1635,22 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                     return DataRow(
                       selected: selected,
                       onSelectChanged: (_) => _selectTreatment(item),
-                    color: WidgetStateProperty.resolveWith<Color?>(
-  (states) {
-    if (states.contains(WidgetState.selected)) {
-      return _isDark
-          ? const Color(0xFF1E3A5F) // dark blue
-          : Colors.blue.shade50;
-    }
-    return null;
-  },
-),
+                      color: WidgetStateProperty.resolveWith<Color?>(
+                        (states) {
+                          if (states.contains(WidgetState.selected)) {
+                            return _isDark ? const Color(0xFF1E3A5F) : Colors.blue.shade50;
+                          }
+                          return null;
+                        },
+                      ),
                       cells: [
-                        DataCell(Text('${index + 1}')),
+                        DataCell(Text('${index + 1}', style: TextStyle(color: _textPrimary))),
                         DataCell(
                           ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 220),
                             child: Text(
                               item.getDisplayName(isArabic),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
+                              style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1461,16 +1671,14 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                             constraints: const BoxConstraints(maxWidth: 120),
                             child: Text(
                               item.textCode.isEmpty ? '-' : item.textCode,
+                              style: TextStyle(color: _textPrimary),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
-                        DataCell(_iconPreview(item.imageCode)),
                         DataCell(
                           Icon(
-                            item.hasLab
-                                ? Icons.check_box
-                                : Icons.check_box_outline_blank,
+                            item.hasLab ? Icons.check_box : Icons.check_box_outline_blank,
                             color: item.hasLab ? Colors.green : Colors.grey,
                           ),
                         ),
@@ -1479,20 +1687,11 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(
-                                  Icons.edit,
-                                  color: Colors.blue,
-                                  size: 20,
-                                ),
-                                onPressed: () =>
-                                    _showTreatmentDialog(existingItem: item),
+                                icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                                onPressed: () => _showTreatmentDialog(existingItem: item),
                               ),
                               IconButton(
-                                icon: const Icon(
-                                  Icons.delete,
-                                  color: Colors.red,
-                                  size: 20,
-                                ),
+                                icon: const Icon(Icons.delete, color: Colors.red, size: 20),
                                 onPressed: () => _deleteTreatment(item),
                               ),
                             ],
@@ -1575,12 +1774,9 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _infoPill(tr('السعر', 'Price'),
-                        '${item.price.toStringAsFixed(2)} JD'),
-                    _infoPill(tr('الرمز', 'Code'),
-                        item.textCode.isEmpty ? '-' : item.textCode),
-                    _infoPill(tr('معمل', 'Lab'),
-                        item.hasLab ? tr('نعم', 'Yes') : tr('لا', 'No')),
+                    _infoPill(tr('السعر', 'Price'), '${item.price.toStringAsFixed(2)} JD'),
+                    _infoPill(tr('الرمز', 'Code'), item.textCode.isEmpty ? '-' : item.textCode),
+                    _infoPill(tr('معمل', 'Lab'), item.hasLab ? tr('نعم', 'Yes') : tr('لا', 'No')),
                     _infoPill(tr('التأثير', 'Action'), item.actionType),
                   ],
                 ),
@@ -1602,8 +1798,7 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
         color: Colors.blueGrey,
         trailing: IconButton(
           icon: const Icon(Icons.add_circle, color: Colors.blue, size: 26),
-          onPressed:
-              _selectedTreatment == null ? null : () => _showDetailDialog(),
+          onPressed: _selectedTreatment == null ? null : () => _showDetailDialog(),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           tooltip: tr('إضافة تفصيل', 'Add Detail'),
@@ -1648,7 +1843,6 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                 headingRowColor: WidgetStateProperty.all(_tableHeaderBg),
                 columns: [
                   DataColumn(label: Text(tr('التفصيل', 'Detail'))),
-                  DataColumn(label: Text(tr('اللون', 'Color'))),
                   DataColumn(label: Text(tr('إجراء', 'Action'))),
                 ],
                 rows: details.map((detail) {
@@ -1656,28 +1850,26 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                   return DataRow(
                     selected: selected,
                     onSelectChanged: (_) => _selectDetail(detail),
-                 color: WidgetStateProperty.resolveWith<Color?>(
-  (states) {
-    if (states.contains(WidgetState.selected)) {
-      return _isDark
-          ? const Color(0xFF1E3A5F)
-          : Colors.blue.shade50;
-    }
-    return null;
-  },
-),
+                    color: WidgetStateProperty.resolveWith<Color?>(
+                      (states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return _isDark ? const Color(0xFF1E3A5F) : Colors.blue.shade50;
+                        }
+                        return null;
+                      },
+                    ),
                     cells: [
                       DataCell(
                         ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 180),
                           child: Text(
                             detail.getDisplayName(isArabic),
+                            style: TextStyle(color: _textPrimary),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
-                      DataCell(_colorBox(detail.color, size: 22)),
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -1693,8 +1885,7 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                                 color: Colors.blue,
                                 size: 18,
                               ),
-                              onPressed: () =>
-                                  _showDetailDialog(existingDetail: detail),
+                              onPressed: () => _showDetailDialog(existingDetail: detail),
                             ),
                             IconButton(
                               padding: EdgeInsets.zero,
@@ -1738,9 +1929,7 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: selected
-                  ? Colors.blue.withOpacity(_isDark ? 0.20 : 0.08)
-                  : _cardBg,
+              color: selected ? Colors.blue.withOpacity(_isDark ? 0.20 : 0.08) : _cardBg,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: selected
@@ -1753,12 +1942,13 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
             ),
             child: Row(
               children: [
-                _colorBox(detail.color),
-                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     detail.getDisplayName(isArabic),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _textPrimary,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1811,19 +2001,6 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
           color: _isDark ? const Color(0xFF64748B) : Colors.grey.shade400,
         ),
       ),
-    );
-  }
-
-  Widget _iconPreview(String imageCode) {
-    if (imageCode.trim().isEmpty) return const Text('-');
-
-    return Image.asset(
-      imageCode,
-      width: 28,
-      height: 28,
-      errorBuilder: (context, error, stackTrace) {
-        return const Icon(Icons.broken_image, size: 24, color: Colors.grey);
-      },
     );
   }
 
@@ -1952,8 +2129,7 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
                                         controller: _desktopHorizontalController,
                                         thumbVisibility: true,
                                         child: SingleChildScrollView(
-                                          controller:
-                                              _desktopHorizontalController,
+                                          controller: _desktopHorizontalController,
                                           scrollDirection: Axis.horizontal,
                                           child: SizedBox(
                                             width: _desktopDesignWidth,
