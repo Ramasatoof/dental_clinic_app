@@ -468,9 +468,7 @@ class _MainDashboardState extends State<MainDashboard> {
     }
   }
 
-  void _toggleAddingMode() {
-    setState(() => _isAddingMode = !_isAddingMode);
-  }
+ 
 
   void _queueCurrentTreatment() {
     if (_selectedTreatmentName.isEmpty) return;

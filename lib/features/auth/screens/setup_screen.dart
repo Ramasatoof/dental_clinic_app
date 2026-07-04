@@ -266,7 +266,6 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
   Color get _cardBg => AppThemeColors.surface(context);
   
   Color get _textPrimary => _isDark ? Colors.white : Colors.black87;
-  Color get _textSecondary => _isDark ? Colors.white70 : Colors.grey.shade700;
   
   Color get _tableHeaderBg => _isDark ? const Color(0xFF334155) : Colors.grey.shade100;
   Color get _mutedTileBg => _isDark ? const Color(0xFF111827) : Colors.grey.withOpacity(0.07);
@@ -518,7 +517,6 @@ class _TreatmentsSetupScreenState extends State<TreatmentsSetupScreen> {
   }
 
   Future<Color?> _pickColorDialog(Color currentColor) async {
-    Color selectedColor = currentColor;
     double hue = HSVColor.fromColor(currentColor).hue;
     double saturation = HSVColor.fromColor(currentColor).saturation;
     double value = HSVColor.fromColor(currentColor).value;
