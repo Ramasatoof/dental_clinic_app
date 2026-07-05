@@ -231,7 +231,6 @@ class _MainDashboardState extends State<MainDashboard> {
   late List<ToothModel> lowerTeeth;
 
   final List<Map<String, dynamic>> _pendingTreatments = [];
-  bool _isAddingMode = false;
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _dateController = TextEditingController();
 
@@ -669,8 +668,15 @@ class _MainDashboardState extends State<MainDashboard> {
 
       setState(() {
         _pendingTreatments.clear();
-        _isAddingMode = false;
-        _deselectAll();
+        for (final t in [...upperTeeth, ...lowerTeeth]) {
+          t.isSelected = false;
+        }
+        _selectedCategory = null;
+        _selectedTreatmentName = '';
+        _selectedSubDetailName = '';
+        _selectedTreatmentData = null;
+        _treatmentsList = [];
+        _detailsList = [];
       });
 
       if (!mounted) return;
